@@ -41,14 +41,17 @@ best solution found across ALL cycles is tracked separately and returned.
 Clearing global_best matters: on a held-out sweep of seeds 30-129 on the
 6-stop case, retaining it as a surviving attractor found the true optimum in
 95/100 runs versus 100/100 when cleared (both with restarts unlimited within
-a 200-iteration budget). Under this module's shipped max_restarts=5 default
-the same sweep gives 98/100 for va_qpso and 99/100 for fixed_beta_qpso.
+a 200-iteration budget).
 
 Termination: the run ends after `max_restarts` consecutive restart cycles
 fail to improve the across-cycle best, or when `max_iterations` total
 iterations are consumed, whichever comes first. Note `t` in beta(t) is the
 GLOBAL iteration index, so fixed_beta_qpso's linear anneal still spans the
 whole budget rather than resetting each cycle.
+
+Budget: num_particles, max_iterations and max_restarts all default to None
+and are then scaled off `dim` by default_budget() -- a flat budget silently
+degrades as the problem grows. Pass explicit values to override.
 """
 
 from typing import Callable, Dict, List, Optional, Tuple
@@ -60,6 +63,37 @@ from .qpso_encoding import decode_order
 
 FitnessFn = Callable[[np.ndarray], float]
 BetaFn = Callable[[int], float]  # iteration t -> beta(t)
+
+
+def default_budget(dim: int) -> Tuple[int, int, int]:
+    """
+    Swarm budget scaled off `dim` (the number of stops).
+
+    A flat budget does not hold as the problem grows: permutation space is
+    dim!, so a setting tuned at one size silently degrades at the next. On
+    held-out seeds against brute-force optima, a flat (30 particles, 200
+    iterations, 5 restarts) found the true optimum in 50/50, 48/50, 43/50
+    and 38/50 runs at dim 6, 7, 8 and 9 respectively -- steadily worse with
+    size. The scaling below held at 50/50 across all four sizes.
+
+    Cost at dim=9 is ~176ms per run, which is comfortably inside a re-plan
+    tick; the cheaper (50*dim, 3*dim) variant runs ~115ms but gave up a run
+    at dim=9, and this is the budget the reported optima depend on.
+
+    Returns:
+        (num_particles, max_iterations, max_restarts)
+    """
+    return max(20, 4 * dim), max(100, 75 * dim), max(5, 5 * dim)
+
+
+def _resolve_budget(dim, num_particles, max_iterations, max_restarts):
+    """Fill in any budget argument left as None from default_budget(dim)."""
+    particles, iterations, restarts = default_budget(dim)
+    return (
+        particles if num_particles is None else num_particles,
+        iterations if max_iterations is None else max_iterations,
+        restarts if max_restarts is None else max_restarts,
+    )
 
 
 def _run_qpso(
@@ -153,15 +187,15 @@ def _run_qpso(
 def fixed_beta_qpso(
     dim: int,
     fitness_fn: FitnessFn,
-    num_particles: int = 30,
-    max_iterations: int = 100,
+    num_particles: Optional[int] = None,
+    max_iterations: Optional[int] = None,
     beta_max: float = 1.0,
     beta_min: float = 0.5,
     bounds: Tuple[float, float] = (0.0, 1.0),
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
-    max_restarts: int = 5,
+    max_restarts: Optional[int] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     Standard linear-anneal beta baseline, used throughout the QPSO literature
@@ -173,6 +207,9 @@ def fixed_beta_qpso(
     beta depends only on iteration progress -- a property of the swarm's own
     schedule, not of anything external. See va_qpso below for the contrast.
     """
+    num_particles, max_iterations, max_restarts = _resolve_budget(
+        dim, num_particles, max_iterations, max_restarts)
+
     def beta_fn(t: int) -> float:
         return beta_max - (beta_max - beta_min) * (t / max_iterations)
 
@@ -202,15 +239,15 @@ def va_qpso(
     dim: int,
     fitness_fn: FitnessFn,
     volatility_index: float,
-    num_particles: int = 30,
-    max_iterations: int = 100,
+    num_particles: Optional[int] = None,
+    max_iterations: Optional[int] = None,
     beta_max: float = 1.0,
     beta_min: float = 0.5,
     bounds: Tuple[float, float] = (0.0, 1.0),
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
-    max_restarts: int = 5,
+    max_restarts: Optional[int] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     beta = beta_min + (beta_max - beta_min) * volatility_index
@@ -223,6 +260,8 @@ def va_qpso(
     if not 0.0 <= volatility_index <= 1.0:
         raise ValueError(f"volatility_index must be in [0, 1], got {volatility_index}")
 
+    num_particles, max_iterations, max_restarts = _resolve_budget(
+        dim, num_particles, max_iterations, max_restarts)
     beta = beta_min + (beta_max - beta_min) * volatility_index
 
     def beta_fn(t: int) -> float:
@@ -237,14 +276,14 @@ def replan(
     congestion_lookup: CongestionLookup,
     volatility_index: float,
     weights: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-    num_particles: int = 30,
-    max_iterations: int = 100,
+    num_particles: Optional[int] = None,
+    max_iterations: Optional[int] = None,
     beta_max: float = 1.0,
     beta_min: float = 0.5,
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
-    max_restarts: int = 5,
+    max_restarts: Optional[int] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     Run va_qpso to convergence (see module docstring for the stopping

@@ -26,17 +26,17 @@ from src.planner.qpso_encoding import (
     adjacency_from_network_graph,
     compute_distance_matrix,
     decode_order,
+    pick_mutually_reachable_stops,
     tour_length,
 )
 from src.state_extraction.network_graph import NetworkGraph
-from test_qpso_optimizer import _pick_mutually_reachable_stops
 
 NET_FILE = "networks/delhi/delhi_intersection.net.xml"
 NUM_STOPS = 8
 
 _network_graph = NetworkGraph(NET_FILE)
 _adjacency = adjacency_from_network_graph(_network_graph, edge_weights={})
-STOPS = _pick_mutually_reachable_stops(_adjacency, NUM_STOPS)
+STOPS = pick_mutually_reachable_stops(_adjacency, NUM_STOPS)
 DISTANCE_MATRIX = compute_distance_matrix(_adjacency, STOPS)
 assert np.all(np.isfinite(DISTANCE_MATRIX)), "expected all stops to be mutually reachable"
 

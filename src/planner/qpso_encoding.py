@@ -1,7 +1,7 @@
 """
 Random-Key Encoding and Distance-Matrix Precomputation for QPSO Route Planning.
 
-QPSO (see qpso_optimizer.py) searches a continuous real-valued space, but stop
+QPSO (see qpso.py) searches a continuous real-valued space, but stop
 sequencing is a discrete permutation problem. Bean's random-key encoding
 bridges the two: each particle position is a real-valued vector x in R^n, and
 the visit order is decoded as decode_order(x) = argsort(x). Because argsort is
@@ -146,6 +146,62 @@ def adjacency_from_network_graph(
         adjacency.setdefault(from_node, []).append((to_node, weight))
 
     return adjacency
+
+
+def _reachable_from(
+    adjacency: Dict[str, List[Tuple[str, float]]],
+    source: str,
+) -> set:
+    """Nodes reachable from `source` by following adjacency edges forward."""
+    seen = {source}
+    stack = [source]
+    while stack:
+        node = stack.pop()
+        for neighbor, _ in adjacency.get(node, []):
+            if neighbor not in seen:
+                seen.add(neighbor)
+                stack.append(neighbor)
+    return seen
+
+
+def _reverse_adjacency(
+    adjacency: Dict[str, List[Tuple[str, float]]],
+) -> Dict[str, List[Tuple[str, float]]]:
+    reverse: Dict[str, List[Tuple[str, float]]] = {}
+    for node, edges in adjacency.items():
+        for neighbor, weight in edges:
+            reverse.setdefault(neighbor, []).append((node, weight))
+    return reverse
+
+
+def pick_mutually_reachable_stops(
+    adjacency: Dict[str, List[Tuple[str, float]]],
+    num_stops: int,
+) -> List[str]:
+    """
+    Pick `num_stops` nodes that are all mutually reachable, so the distance
+    matrix built from them has no np.inf entries.
+
+    Real road networks are directed (one-ways), so an arbitrary set of nodes
+    is usually NOT mutually reachable and would yield an unusable matrix. A
+    node x is mutually reachable with `source` iff x is forward-reachable
+    from source AND source is forward-reachable from x (i.e. x is reachable
+    from source on the reversed graph); the intersection of those two sets is
+    exactly the strongly connected component containing `source`.
+
+    Raises:
+        RuntimeError: if no strongly connected component is large enough.
+    """
+    reverse = _reverse_adjacency(adjacency)
+    for source in adjacency:
+        if not adjacency.get(source):
+            continue
+        scc = _reachable_from(adjacency, source) & _reachable_from(reverse, source)
+        if len(scc) >= num_stops:
+            return sorted(scc)[:num_stops]
+    raise RuntimeError(
+        f"Could not find {num_stops} mutually-reachable nodes in this network."
+    )
 
 
 def tour_length(order: np.ndarray, distance_matrix: np.ndarray) -> float:

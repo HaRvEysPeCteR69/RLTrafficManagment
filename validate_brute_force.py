@@ -4,18 +4,17 @@ Brute-force validation of va_qpso on a 6-stop case.
 With 6 stops there are 6! = 720 possible orderings, so the true optimum can
 be found exhaustively and compared against what the swarm actually finds.
 
-Fixed experimental setup (both numbers held constant across all 30 runs):
-    NUM_PARTICLES  = 30
-    MAX_ITERATIONS = 200
-    PATIENCE       = 15   (qpso.py's fitness-plateau stopping default)
+Experimental setup: the SHIPPED defaults from qpso.default_budget(dim), so
+this validates what callers actually get rather than a hand-picked budget.
+At dim=6 that resolves to 24 particles / 450 iterations / 30 restarts, held
+constant across all 30 runs, with PATIENCE=15 (qpso.py's stagnation
+threshold). The exact numbers are printed at run time.
 
-30 particles x 200 iterations = up to 6000 fitness evaluations per run,
-roughly 8x the size of the entire 720-ordering search space. A swarm given
-8x the search space in evaluations and still missing the optimum is not
-under-budgeted -- see the diagnostics section, and note that raising the
-budget to 40 particles / 300 iterations / patience 100 moves the hit count
-by ~2 runs, which is the signature of premature convergence rather than an
-exhausted iteration budget.
+For scale, 24 x 450 is up to 10800 fitness evaluations against a
+720-ordering search space. A swarm given many times the search space in
+evaluations and still missing the optimum is not under-budgeted -- that was
+the original finding here, and it is what the diagnostics below exist to
+distinguish.
 
 MATCH TOLERANCE: a run counts as hitting the optimum if its score is within
 TOLERANCE_RTOL = 1e-6 *relative* of the brute-force optimum. This is a
@@ -40,20 +39,19 @@ import sys
 import numpy as np
 
 from src.planner.fitness import route_components, score_route
-from src.planner.qpso import va_qpso
+from src.planner.qpso import default_budget, va_qpso
 from src.planner.qpso_encoding import (
     adjacency_from_network_graph,
     compute_distance_matrix,
     decode_order,
+    pick_mutually_reachable_stops,
 )
 from src.state_extraction.network_graph import NetworkGraph
-from test_qpso_optimizer import _pick_mutually_reachable_stops
 
 NET_FILE = "networks/delhi/delhi_intersection.net.xml"
 NUM_STOPS = 6
 
-NUM_PARTICLES = 30
-MAX_ITERATIONS = 200
+NUM_PARTICLES, MAX_ITERATIONS, MAX_RESTARTS = default_budget(NUM_STOPS)
 PATIENCE = 15
 NUM_RUNS = 30
 PASS_THRESHOLD = 28
@@ -69,7 +67,7 @@ CONGESTION_LOOKUP = {}
 def build_problem():
     network_graph = NetworkGraph(NET_FILE)
     adjacency = adjacency_from_network_graph(network_graph, edge_weights={})
-    stops = _pick_mutually_reachable_stops(adjacency, NUM_STOPS)
+    stops = pick_mutually_reachable_stops(adjacency, NUM_STOPS)
     distance_matrix = compute_distance_matrix(adjacency, stops)
     assert np.all(np.isfinite(distance_matrix)), "expected all stops to be mutually reachable"
     return stops, distance_matrix
@@ -102,6 +100,7 @@ def run_swarm(distance_matrix, seed):
         volatility_index=VOLATILITY_INDEX,
         num_particles=NUM_PARTICLES,
         max_iterations=MAX_ITERATIONS,
+        max_restarts=MAX_RESTARTS,
         patience=PATIENCE,
         seed=seed,
     )
@@ -244,8 +243,9 @@ def _track_search_coverage(distance_matrix, seed, iterations=300):
 def main():
     stops, distance_matrix = build_problem()
     print(f"Stops ({NUM_STOPS}): {stops}")
-    print(f"Setup: {NUM_PARTICLES} particles, {MAX_ITERATIONS} max iterations, "
-          f"patience {PATIENCE}, {NUM_RUNS} runs, volatility_index={VOLATILITY_INDEX}")
+    print(f"Setup (from qpso.default_budget({NUM_STOPS})): {NUM_PARTICLES} particles, "
+          f"{MAX_ITERATIONS} max iterations, {MAX_RESTARTS} max restarts, patience {PATIENCE}, "
+          f"{NUM_RUNS} runs, volatility_index={VOLATILITY_INDEX}")
 
     optimal_order, optimal_score, all_scores = brute_force_optimum(distance_matrix)
     print(f"\nBrute force over {len(all_scores)} orderings ({NUM_STOPS}! = "

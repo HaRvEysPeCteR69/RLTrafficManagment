@@ -4,7 +4,7 @@ Route fitness scoring: travel time, distance, and congestion cost.
 score_route() combines three weighted terms into a single scalar (lower is
 better) — the intended QPSO fitness function once a candidate particle
 position has been decoded to a stop order (see qpso_encoding.decode_order /
-qpso_optimizer.optimize_tour):
+qpso.replan):
 
     score = w1*T + w2*D + w3*C
 

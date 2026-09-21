@@ -13,7 +13,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.planner import QPSOOptimizer
 from src.volatility import VolatilityIndexCalculator
 from src.state_extraction import TrafficStateExtractor
 from src.reactive import ReactiveRuleEngine
@@ -34,8 +33,9 @@ def main():
     print(f"Particles: {args.particles} | Iterations: {args.iterations}")
     print("=" * 60)
 
-    # Instantiate modules
-    optimizer = QPSOOptimizer(num_particles=args.particles, max_iterations=args.iterations)
+    # Instantiate modules. Route planning itself goes through
+    # src.planner.qpso.replan(), which is called per re-plan tick with a
+    # frozen state snapshot rather than held as a long-lived optimizer object.
     volatility_calc = VolatilityIndexCalculator()
     reactive_engine = ReactiveRuleEngine()
 
