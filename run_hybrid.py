@@ -173,6 +173,7 @@ def main():
     parser.add_argument("--gui", action="store_true", help="Launch SUMO with GUI")
     parser.add_argument("--use-libsumo", action="store_true", help="Drive the sim in-process via libsumo")
     parser.add_argument("--log", type=str, default=LOG_PATH, help="Path to the JSONL event log")
+    parser.add_argument("--cfg", type=str, default=SUMO_CFG, help="Path to SUMO configuration file")
     args = parser.parse_args()
 
     network_graph = NetworkGraph(NET_FILE)
@@ -181,7 +182,7 @@ def main():
     print(f"Stops ({NUM_STOPS}): {stops}")
 
     extractor = SubscriptionStateExtractor(edge_ids, use_libsumo=args.use_libsumo)
-    extractor.connect(SUMO_CFG, use_gui=args.gui)
+    extractor.connect(args.cfg, use_gui=args.gui)
 
     volatility_calc = NetworkVolatilityIndex(window_size=VOLATILITY_WINDOW)
     arbiter = ReplanArbiter(ARBITER_WINDOW_SECONDS, ARBITER_REROUTE_THRESHOLD)

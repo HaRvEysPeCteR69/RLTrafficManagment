@@ -63,13 +63,17 @@ class NetworkVolatilityIndex:
     grows far past `reference_variance`.
 
     `reference_variance` (in (m/s)^2) is the variance level considered
-    "highly volatile" for this network -- tune it to the network's typical
-    free-flow speed (e.g. a busier, higher-speed corridor should use a
-    larger reference so ordinary noise doesn't read as already-saturated
-    volatility).
+    "moderately high" volatility for this network. Because `network_mean_speed`
+    is a spatial average across all edges (772 in the Delhi network, where
+    most are empty and hold static free-flow speeds), the variance of the
+    spatial mean is compressed by roughly 1000x relative to single-edge
+    variance. Empirical measurements across Low, Medium, and High scenarios
+    show network-mean rolling variances of ~0.0007 (Low) to ~0.0044 (High
+    during incidents). Setting `reference_variance = 0.002` scales Low to
+    ~0.24, Medium to ~0.32, and High up to ~0.69.
     """
 
-    def __init__(self, window_size: int = 15, reference_variance: float = 4.0):
+    def __init__(self, window_size: int = 15, reference_variance: float = 0.002):
         self.window_size = window_size
         self.reference_variance = reference_variance
         self.history: deque = deque(maxlen=window_size)

@@ -136,6 +136,7 @@ class SubscriptionStateExtractor:
             "--step-length", str(step_length),
             "--start",
             "--quit-on-end", "false",
+            "--ignore-route-errors", "true",
         ]
         self._traci.start(sumo_cmd)
         self._connected = True
