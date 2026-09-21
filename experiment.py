@@ -206,13 +206,14 @@ def run_single_trial(
                     network_graph, state, stops
                 )
 
+                replan_seed = (seed * 10007 + replan_count * 31) % (2**31 - 1)
                 best_order, best_score = qpso_replan(
                     stops,
                     distance_matrix,
                     congestion_lookup,
                     volatility_index=volatility_index,
                     algorithm=algorithm,
-                    seed=seed,
+                    seed=replan_seed,
                 )
                 current_best_order = best_order
                 last_T, last_D, last_C = route_components(

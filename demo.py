@@ -364,3 +364,34 @@ if start_btn:
 
         progress_bar.progress(1.0)
         st.success(f"Simulation completed: {sim_time:.0f}s simulated, {replan_count} replans, {reroute_count} reactive detours.")
+else:
+    # Initial state display before start is clicked
+    st.info("💡 **Ready to run**: Select your scenario in the sidebar and click **Start Simulation** (or **Start Replay**) to begin live execution.")
+    if os.path.exists(DEFAULT_LOG):
+        try:
+            with open(DEFAULT_LOG, "r", encoding="utf-8") as f:
+                lines = [json.loads(line.strip()) for line in f if line.strip()]
+            if lines:
+                last_ev = lines[-1]
+                render_kpis(
+                    last_ev.get("sim_time", 0.0),
+                    last_ev.get("volatility_index", 0.0),
+                    last_ev.get("next_interval_seconds", 120.0),
+                    sum(1 for e in lines if e.get("event") == "replan"),
+                    sum(1 for e in lines if e.get("event") == "reroute"),
+                )
+                # Find last replan event for route display
+                last_replan = next((e for e in reversed(lines) if e.get("event") == "replan"), None)
+                if last_replan:
+                    render_route(
+                        last_replan.get("stops", []),
+                        last_replan.get("best_order", list(range(len(last_replan.get("stops", []))))),
+                        last_replan.get("fitness", 0.0),
+                    )
+                render_event_feed(lines)
+        except Exception:
+            pass
+    else:
+        render_kpis(0.0, 0.0, 120.0, 0, 0)
+        route_status_box.info("No active route yet. Click Start in the sidebar.")
+        event_table_box.write("No events recorded yet.")
