@@ -1,0 +1,38 @@
+{
+  "Random": {
+    "policy": "Random",
+    "num_episodes": 3,
+    "avg_reward": -18.299999999999994,
+    "std_reward": 1.416568624058407,
+    "avg_waiting_time": 0.3509259259259259,
+    "std_waiting_time": 0.2993935342324414,
+    "avg_queue_length": 0.036111111111111115,
+    "max_queue_length": 1,
+    "avg_throughput": 0.0,
+    "std_throughput": 0.0
+  },
+  "Fixed-Time": {
+    "policy": "Fixed-Time",
+    "num_episodes": 3,
+    "avg_reward": -5.900000000000001,
+    "std_reward": 1.7007321910901718e-15,
+    "avg_waiting_time": 0.7046296296296296,
+    "std_waiting_time": 0.03631235472431034,
+    "avg_queue_length": 0.06574074074074074,
+    "max_queue_length": 1,
+    "avg_throughput": 0.0,
+    "std_throughput": 0.0
+  },
+  "DQN": {
+    "policy": "DQN",
+    "num_episodes": 3,
+    "avg_reward": -15.633333333333296,
+    "std_reward": 0.09428090415820559,
+    "avg_waiting_time": 0.06759259259259259,
+    "std_waiting_time": 0.033666035116107114,
+    "avg_queue_length": 0.017592592592592594,
+    "max_queue_length": 1,
+    "avg_throughput": 0.0,
+    "std_throughput": 0.0
+  }
+}
