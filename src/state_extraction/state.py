@@ -62,12 +62,22 @@ VEHICLE_SUBSCRIBE_VARS = (
     tc.VAR_SPEED,
     tc.VAR_ROAD_ID,
     tc.VAR_WAITING_TIME,
+    tc.VAR_ROUTE_INDEX,
 )
 _VEHICLE_FIELD_NAMES = {
     tc.VAR_SPEED: "speed",
     tc.VAR_ROAD_ID: "edge_id",
     tc.VAR_WAITING_TIME: "waiting_time",
+    tc.VAR_ROUTE_INDEX: "route_index",
 }
+# tc.VAR_ROUTE (the full edge list) and tc.VAR_NEXT_EDGE are NOT subscribable
+# in this SUMO version (confirmed empirically -- subscribing either raises
+# "unsupported variable"). route_index IS subscribable, so a caller that
+# needs "this vehicle's planned next edge" (e.g. reactive.py) must fetch the
+# full route ONCE via a regular traci.vehicle.getRoute() call when the
+# vehicle departs (see the `traci` property below), cache it, and thereafter
+# combine that cached list with the subscribed route_index each step --
+# still zero per-step getRoute() polling.
 
 _SIM_SUBSCRIBE_VARS = (
     tc.VAR_DEPARTED_VEHICLES_IDS,
@@ -194,3 +204,14 @@ class SubscriptionStateExtractor:
         if self._connected:
             self._traci.close()
             self._connected = False
+
+    @property
+    def traci(self):
+        """
+        The underlying traci/libsumo module, for the rare direct call that
+        falls outside the batched-subscription flow above -- e.g. a one-time
+        traci.vehicle.getRoute() when a vehicle departs, or issuing a
+        traci.vehicle.setRoute() to apply a reactive reroute. Both are
+        one-off, per-vehicle-lifecycle-event calls, not per-step polling.
+        """
+        return self._traci

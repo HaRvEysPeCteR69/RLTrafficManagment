@@ -12,7 +12,7 @@ from .qpso_encoding import (
     tour_length,
 )
 from .fitness import score_route, route_components
-from .qpso import fixed_beta_qpso, va_qpso, replan
+from .qpso import fixed_beta_qpso, va_qpso, replan, default_budget
 
 __all__ = [
     "RoutingObjective",
@@ -28,4 +28,5 @@ __all__ = [
     "fixed_beta_qpso",
     "va_qpso",
     "replan",
+    "default_budget",
 ]
