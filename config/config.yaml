@@ -1,76 +1,46 @@
-# Deep Reinforcement Learning for Smart Traffic Signal Optimization
-# Configuration File
-
+# QPSO Delivery Route Optimizer Configuration
 # Environment settings
 environment:
   net_file: "networks/delhi/delhi_intersection.net.xml"
-  route_file: "networks/delhi/delhi_intersection.rou.xml"
+  route_file: "networks/delhi/routes.rou.xml"
   sumo_cfg: "networks/delhi/delhi_intersection.sumocfg"
   additional_file: "networks/delhi/delhi_vtypes.add.xml,networks/delhi/delhi_closures.add.xml"
-  use_gui: false  # Set to true for visualization
-  num_seconds: 3600  # Simulation duration (1 hour)
-  delta_time: 5  # Seconds per action step
-  yellow_time: 3  # Yellow phase duration
-  min_green: 10  # Minimum green phase duration
-  max_green: 50  # Maximum green phase duration
-  reward_fn: "custom"  # 'custom' or 'diff-waiting-time'
+  use_gui: false
+  step_length: 1.0
+  num_seconds: 3600
 
-# State representation
-state:
-  include_density: true
-  include_queue: true
-  include_phase: true
-  include_time_on_phase: true
+# Delivery Vehicle Fleet settings
+delivery:
+  vehicle_type: "two_wheeler"  # Indian delivery two-wheeler (motorcycle/scooter)
+  fleet_size: 5
+  depot_edge: "28103794#0"
 
-# Action space (4 phases for single intersection)
-actions:
-  num_phases: 4
-  phases:
-    - "NS-green"    # North-South through
-    - "EW-green"    # East-West through
-    - "NS-left"     # North-South left turn
-    - "EW-left"     # East-West left turn
-
-# Reward settings
-reward:
-  waiting_time_weight: -1.0
-  phase_change_penalty: 0.1
-  queue_weight: 0.0
-
-# DQN Agent hyperparameters
-dqn:
-  learning_rate: 0.001
-  gamma: 0.99  # Discount factor
-  epsilon_start: 1.0
-  epsilon_end: 0.01
-  epsilon_decay: 0.995
-  batch_size: 64
-  buffer_size: 100000
-  target_update_freq: 100  # Steps between target network updates
-  hidden_layers: [256, 256]  # Neural network architecture
-  activation: "relu"
-
-# Training settings
-training:
-  num_episodes: 500
-  max_steps_per_episode: 720  # 3600s / 5s per step
-  save_freq: 50  # Save model every N episodes
-  eval_freq: 25  # Evaluate every N episodes
+# QPSO Optimizer hyperparameters
+qpso:
+  num_particles: 30
+  max_iterations: 60
+  beta: 0.75                  # Contraction-expansion coefficient
+  anneal_beta: true
   seed: 42
-  checkpoint_dir: "checkpoints"
-  log_dir: "logs"
 
-# Evaluation settings
-evaluation:
-  num_episodes: 10
-  render: false
-  save_metrics: true
-  metrics_dir: "results"
+# Objective function weights
+objective:
+  weight_travel_time: 1.0
+  weight_volatility: 0.6
+  weight_distance: 0.05
 
-# Baseline settings
-baselines:
-  fixed_time:
-    ns_green_duration: 30  # seconds
-    ew_green_duration: 30  # seconds
-  random:
-    seed: 42
+# Volatility Index settings
+volatility:
+  window_size: 15
+  smoothing_factor: 0.2
+
+# Reactive Rule settings
+reactive:
+  speed_drop_threshold: 0.35   # Trigger reroute if current speed < 35% of free-flow
+  delay_threshold_seconds: 90.0
+  volatility_trigger: 0.75
+
+# Output and logging
+logging:
+  results_dir: "results"
+  outputs_dir: "outputs"

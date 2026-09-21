@@ -1,4 +1,4 @@
-﻿# Deep Reinforcement Learning for Smart Traffic Signal Optimization
+# Deep Reinforcement Learning for Smart Traffic Signal Optimization
 
 > Teaching a computer to control traffic lights — better than a fixed timer ever could.
 
@@ -1661,7 +1661,7 @@ netconvert \
   --tls.guess-signals true \                  # Detect where traffic lights should be
   --tls.discard-simple \                      # Remove trivial traffic lights
   --tls.join \                                # Combine related traffic lights
-  --tls.default-type actuated \               # Use smart signal timing as default
+  --tls.default-type static \                 # Use fixed-timer signal timing (static) as default
   --tls.guess true \                          # Guess additional traffic light locations
   --edges.join \                              # Merge parallel road segments
   --remove-edges.isolated \                   # Remove dead-end road fragments
@@ -1679,7 +1679,7 @@ netconvert \
 | `--junctions.join` | Combines junctions that are too close together | In OSM, one real intersection might be split into 3-4 nodes |
 | `--tls.guess-signals` | Detects traffic lights from the map data | We need to know where signals are for our AI to control them |
 | `--tls.join` | Merges multiple signal heads at one intersection | A physical intersection might have 4+ signal heads that should act as one |
-| `--tls.default-type actuated` | Sets signals to smart-responsive type | Better default than fixed-time for our RL training |
+| `--tls.default-type static` | Sets signals to fixed-time (static) type | Reflects real Indian traffic lights with fixed timers |
 | `--remove-edges.isolated` | Removes disconnected road fragments | These would trap vehicles and break the simulation |
 | `--no-turnarounds` | Prevents instant 180° U-turns | Unrealistic — cars don't instantly reverse on busy Delhi roads |
 

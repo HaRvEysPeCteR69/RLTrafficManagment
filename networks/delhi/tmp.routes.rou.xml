@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<!-- generated on 2026-05-14 11:17:41.343183 by Eclipse SUMO randomTrips.py v1_26_0+0000-fa7df22d7f1
+<configuration>
+    <net-file value="delhi_intersection.net.xml"/>
+    <additional-files value="delhi_vtypes.add.xml"/>
+    <output-trip-file value="trips_ambulance.trips.xml"/>
+    <prefix value="ambulance"/>
+    <trip-attributes value="type=&quot;ambulance&quot;"/>
+    <fringe-factor value="10"/>
+    <allow-fringe.min-length value="50.0"/>
+    <edge-permission value="emergency"/>
+    <random value="True"/>
+    <min-distance value="100.0"/>
+    <period value="90.0"/>
+</configuration>
+-->
+
 <!-- generated on 2026-05-14T11:17:41.259245+05:30 by Eclipse SUMO duarouter 1.26.0
 <duarouterConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/duarouterConfiguration.xsd">
 

@@ -25,6 +25,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+from src.agent import DQNAgent
 
 # Set SUMO_HOME if not already set
 if 'SUMO_HOME' not in os.environ:
@@ -347,6 +348,52 @@ def run_quick_test(args):
     print("="*60)
 
 
+def run_gui_showcase(args):
+    """Run a longer GUI-only showcase so vehicles are clearly visible."""
+    print("\n" + "="*60)
+    print("RUNNING SUMO GUI SHOWCASE")
+    print("="*60)
+
+    config_path = args.config if args.config else PROJECT_ROOT / "config" / "eval_windows.yaml"
+    config = load_config(config_path)
+
+    env_config = build_env_config(config)
+    # Use the compact single-intersection network for a clearer visual demo.
+    env_config['net_file'] = str(PROJECT_ROOT / "networks" / "single_intersection.net.xml")
+    env_config['route_file'] = str(PROJECT_ROOT / "networks" / "single_intersection.rou.xml")
+    env_config['additional_file'] = None
+    env_config['use_gui'] = True
+    env_config['num_seconds'] = getattr(args, 'showcase_seconds', 1800)
+
+    print("Creating GUI environment...")
+    env = TrafficEnvironment(**env_config)
+    print(f"State dim: {env.state_dim}")
+    print(f"Action dim: {env.action_dim}")
+    print(f"Showcase steps: {getattr(args, 'showcase_steps', 120)}")
+
+    state, _ = env.reset()
+    total_reward = 0.0
+
+    print("\nWatching cars move in SUMO GUI...")
+    for step_index in range(1, getattr(args, 'showcase_steps', 120) + 1):
+        action = env.action_space.sample()
+        state, reward, terminated, truncated, info = env.step(action)
+        total_reward += reward
+
+        if step_index % 20 == 0 or terminated or truncated:
+            print(
+                f"  Step {step_index}: action={action}, reward={reward:.2f}, "
+                f"wait={info.get('waiting_time', 0):.1f}, queue={info.get('queue_length', 0):.1f}"
+            )
+
+        if terminated or truncated:
+            break
+
+    env.close()
+    print(f"\nGUI showcase finished. Total reward: {total_reward:.2f}")
+    print("="*60)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluate traffic signal controllers"
@@ -375,10 +422,24 @@ def main():
         '--quick-test', action='store_true',
         help='Run a quick test to verify setup'
     )
+    parser.add_argument(
+        '--showcase', action='store_true',
+        help='Run a longer GUI demo with visible traffic flow'
+    )
+    parser.add_argument(
+        '--showcase-steps', type=int, default=120,
+        help='Number of steps to run in showcase mode'
+    )
+    parser.add_argument(
+        '--showcase-seconds', type=int, default=1800,
+        help='Simulation duration for showcase mode'
+    )
     
     args = parser.parse_args()
     
-    if args.quick_test:
+    if args.showcase:
+        run_gui_showcase(args)
+    elif args.quick_test:
         run_quick_test(args)
     else:
         evaluate(args)
