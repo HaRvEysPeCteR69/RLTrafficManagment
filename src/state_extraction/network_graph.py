@@ -5,7 +5,7 @@ Parses SUMO road networks (.net.xml) and constructs graph representation
 for pathfinding, adjacency queries, and routing optimization.
 """
 
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 import xml.etree.ElementTree as ET
 
 

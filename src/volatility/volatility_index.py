@@ -48,3 +48,54 @@ class VolatilityIndexCalculator:
         # Coefficient of variation as volatility metric
         volatility = std_speed / mean_speed
         return volatility
+
+
+class NetworkVolatilityIndex:
+    """
+    Rolling-variance-based, network-wide traffic volatility index,
+    normalized to [0, 1).
+
+    Each update() call takes one step's per-edge mean speeds, averages them
+    into a single network-wide mean speed, and appends that scalar to a
+    rolling window. The index is that window's variance, squashed into
+    [0, 1) via variance / (variance + reference_variance): 0 when speeds
+    have been perfectly steady over the window, approaching 1 as variance
+    grows far past `reference_variance`.
+
+    `reference_variance` (in (m/s)^2) is the variance level considered
+    "highly volatile" for this network -- tune it to the network's typical
+    free-flow speed (e.g. a busier, higher-speed corridor should use a
+    larger reference so ordinary noise doesn't read as already-saturated
+    volatility).
+    """
+
+    def __init__(self, window_size: int = 15, reference_variance: float = 4.0):
+        self.window_size = window_size
+        self.reference_variance = reference_variance
+        self.history: deque = deque(maxlen=window_size)
+
+    def update(self, edge_mean_speeds: Dict[str, float]) -> float:
+        """
+        Record one step's network-wide mean speed and return the current
+        volatility index.
+
+        Args:
+            edge_mean_speeds: edge_id -> mean_speed for this step, e.g.
+                {e: v["mean_speed"] for e, v in state["edges"].items()}
+                from state.py's SubscriptionStateExtractor.get_state().
+
+        Returns:
+            Volatility index in [0, 1). 0.0 until at least 2 observations
+            have been recorded (variance is undefined with fewer).
+        """
+        if not edge_mean_speeds:
+            return 0.0
+
+        network_mean_speed = float(np.mean(list(edge_mean_speeds.values())))
+        self.history.append(network_mean_speed)
+
+        if len(self.history) < 2:
+            return 0.0
+
+        variance = float(np.var(self.history))
+        return variance / (variance + self.reference_variance)
