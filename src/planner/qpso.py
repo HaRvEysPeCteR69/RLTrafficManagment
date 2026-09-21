@@ -274,7 +274,7 @@ def replan(
     stops: List[str],
     distance_matrix: np.ndarray,
     congestion_lookup: CongestionLookup,
-    volatility_index: float,
+    volatility_index: float = 0.5,
     weights: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     num_particles: Optional[int] = None,
     max_iterations: Optional[int] = None,
@@ -284,25 +284,24 @@ def replan(
     patience: int = 15,
     tol: float = 1e-6,
     max_restarts: Optional[int] = None,
+    algorithm: str = "va_qpso",
 ) -> Tuple[np.ndarray, float]:
     """
-    Run va_qpso to convergence (see module docstring for the stopping
+    Run QPSO to convergence (see module docstring for the stopping
     criterion) on a frozen re-plan snapshot, and return the best stop order
     found plus its fitness score.
 
     Args:
         stops: Stop identifiers, in the order they map to distance_matrix's
-            rows/columns. Not used directly in the search -- only its length
-            (the encoding dimension) matters here; map the returned order
-            back to ids yourself via [stops[i] for i in best_order].
+            rows/columns.
         distance_matrix: (n, n) live-weighted travel-time matrix for this
             snapshot, e.g. from qpso_encoding.compute_distance_matrix().
         congestion_lookup: Per-leg edge occupancy/capacity data (see
             fitness.CongestionLookup).
         volatility_index: Current network volatility in [0, 1], e.g. from
-            volatility.NetworkVolatilityIndex.update(), measured on the same
-            snapshot as distance_matrix / congestion_lookup.
+            volatility.NetworkVolatilityIndex.update(), used when algorithm="va_qpso".
         weights: (w1, w2, w3) passed through to score_route for (T, D, C).
+        algorithm: "va_qpso" (volatility-adaptive) or "fixed_beta_qpso" (linear anneal).
 
     Returns:
         (best_order, best_score): best_order is the decoded visit-order
@@ -319,18 +318,35 @@ def replan(
         order = decode_order(x)
         return score_route(order, distance_matrix, congestion_lookup, weights)
 
-    best_position, best_score = va_qpso(
-        dim=n,
-        fitness_fn=fitness_fn,
-        volatility_index=volatility_index,
-        num_particles=num_particles,
-        max_iterations=max_iterations,
-        beta_max=beta_max,
-        beta_min=beta_min,
-        seed=seed,
-        patience=patience,
-        tol=tol,
-        max_restarts=max_restarts,
-    )
+    if algorithm == "va_qpso":
+        best_position, best_score = va_qpso(
+            dim=n,
+            fitness_fn=fitness_fn,
+            volatility_index=volatility_index,
+            num_particles=num_particles,
+            max_iterations=max_iterations,
+            beta_max=beta_max,
+            beta_min=beta_min,
+            seed=seed,
+            patience=patience,
+            tol=tol,
+            max_restarts=max_restarts,
+        )
+    elif algorithm == "fixed_beta_qpso":
+        best_position, best_score = fixed_beta_qpso(
+            dim=n,
+            fitness_fn=fitness_fn,
+            num_particles=num_particles,
+            max_iterations=max_iterations,
+            beta_max=beta_max,
+            beta_min=beta_min,
+            seed=seed,
+            patience=patience,
+            tol=tol,
+            max_restarts=max_restarts,
+        )
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}. Must be 'va_qpso' or 'fixed_beta_qpso'.")
+
     best_order = decode_order(best_position)
     return best_order, best_score
