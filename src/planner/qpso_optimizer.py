@@ -11,6 +11,9 @@ Particles update positions via delta-potential well wave function:
 import numpy as np
 from typing import List, Tuple, Callable, Optional
 
+from .qpso_encoding import decode_order
+from .fitness import score_route, CongestionLookup
+
 
 class QPSOOptimizer:
     """
@@ -77,3 +80,56 @@ class QPSOOptimizer:
                 self.positions[i] = np.clip(self.positions[i], self.bounds[0], self.bounds[1])
 
         return self.gbest_position, self.gbest_score
+
+    def optimize_tour(
+        self,
+        distance_matrix: np.ndarray,
+        congestion_lookup: Optional[CongestionLookup] = None,
+        weights: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Optimize a stop visit order against a precomputed distance matrix and
+        (optionally) live congestion data.
+
+        Wires the swarm to the discrete sequencing problem via Bean's (1994)
+        random-key encoding (see qpso_encoding.py): each particle position is
+        just treated as a random-key vector, decoded to a permutation with
+        decode_order() (argsort), and scored with fitness.score_route() —
+        O(n) distance_matrix/congestion_lookup lookups per evaluation, no
+        graph search inside the swarm loop.
+
+        Args:
+            distance_matrix: (n, n) precomputed live-weighted travel-time
+                matrix, e.g. from qpso_encoding.compute_distance_matrix().
+                n must equal self.dim (one random key per stop).
+            congestion_lookup: Per-leg edge occupancy/capacity data for the
+                congestion term (see fitness.CongestionLookup). Defaults to
+                no congestion data (every leg contributes 0 to that term),
+                so the fitness reduces to the distance/time terms only.
+            weights: (w1, w2, w3) passed through to score_route for
+                (T, D, C); normalized internally to sum to 1.
+
+        Returns:
+            (best_order, best_score): best_order is the decoded visit-order
+            permutation (indices into distance_matrix's rows/columns), and
+            best_score is its weighted score_route() fitness — not a raw
+            distance. Call fitness.route_components(best_order,
+            distance_matrix, congestion_lookup) if you need the underlying
+            (T, D, C) breakdown.
+        """
+        n = distance_matrix.shape[0]
+        if n != self.dim:
+            raise ValueError(
+                f"distance_matrix has {n} stops but optimizer was constructed with dim={self.dim}; "
+                "construct QPSOOptimizer with dim=n (one random key per stop)."
+            )
+        if congestion_lookup is None:
+            congestion_lookup = {}
+
+        def fitness_fn(x: np.ndarray) -> float:
+            order = decode_order(x)
+            return score_route(order, distance_matrix, congestion_lookup, weights)
+
+        best_position, best_score = self.optimize(fitness_fn)
+        best_order = decode_order(best_position)
+        return best_order, best_score

@@ -1,0 +1,70 @@
+# Scenario Configuration for Delivery Route Optimization
+# Low, Medium, and High Volatility Scenarios on Delhi Connaught Place Network
+
+scenarios:
+  low:
+    name: "Low Volatility (Off-Peak Smooth Flow)"
+    description: "Off-peak light mixed traffic (~1,000 veh/hr rate), no road incidents, stable free-flow speeds"
+    duration: 300
+    seed: 42
+    network_file: "networks/delhi/delhi_intersection.net.xml"
+    vtypes_file: "networks/delhi/delhi_vtypes.add.xml"
+    incidents_file: "networks/delhi/scenarios/low/incidents.add.xml"
+    routes_file: "networks/delhi/scenarios/low/routes.rou.xml"
+    sumocfg: "networks/delhi/scenarios/low/scenario.sumocfg"
+    expected_volatility: "low"
+    incident: null
+
+  medium:
+    name: "Medium Volatility (Moderate Traffic + Dynamic Incident)"
+    description: "Moderate traffic (~2,500 veh/hr rate) with scripted dynamic lane closure at t=120s on Connaught connector"
+    duration: 300
+    seed: 42
+    network_file: "networks/delhi/delhi_intersection.net.xml"
+    vtypes_file: "networks/delhi/delhi_vtypes.add.xml"
+    incidents_file: "networks/delhi/scenarios/medium/incidents.add.xml"
+    routes_file: "networks/delhi/scenarios/medium/routes.rou.xml"
+    sumocfg: "networks/delhi/scenarios/medium/scenario.sumocfg"
+    expected_volatility: "medium"
+    incident:
+      type: "road_closure"
+      trigger_time: 120
+      affected_edges: ["164675827#2", "164675827#3"]
+      allow: "emergency"
+
+  high:
+    name: "High Volatility (Heavy Peak + Compound Closure + Demand Surge)"
+    description: "Heavy peak congestion (~4,500 veh/hr rate), dual road closures at t=90s, and sudden traffic surge at t=100-220s"
+    duration: 300
+    seed: 42
+    network_file: "networks/delhi/delhi_intersection.net.xml"
+    vtypes_file: "networks/delhi/delhi_vtypes.add.xml"
+    incidents_file: "networks/delhi/scenarios/high/incidents.add.xml"
+    routes_file: "networks/delhi/scenarios/high/routes.rou.xml"
+    sumocfg: "networks/delhi/scenarios/high/scenario.sumocfg"
+    expected_volatility: "high"
+    incident:
+      type: "compound_disruption"
+      trigger_time: 90
+      closure_edges:
+        - "253307767#1"
+        - "253307767#2"
+        - "253307767#3"
+        - "164675827#2"
+        - "164675827#3"
+      surge_window: [100, 220]
+
+# Delivery Vehicle Configuration for Routing
+delivery_mission:
+  depot_edge: "28103794#0"
+  vehicle_type: "two_wheeler"
+  dropoffs:
+    - stop_id: "stop_1"
+      edge: "570616026#5"
+      priority: "normal"
+    - stop_id: "stop_2"
+      edge: "391534135#6"
+      priority: "high"
+    - stop_id: "stop_3"
+      edge: "24582921#1"
+      priority: "normal"

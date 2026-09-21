@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<additional xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/additional_file.xsd">
+    <rerouter id="incident_med_closure" edges="164675827#2 164675827#3 -164675827#2 -164675827#3">
+        <interval begin="120" end="3600">
+            <closingReroute id="164675827#2" allow="emergency" />
+            <closingReroute id="164675827#3" allow="emergency" />
+            <closingReroute id="-164675827#2" allow="emergency" />
+            <closingReroute id="-164675827#3" allow="emergency" />
+        </interval>
+    </rerouter>
+</additional>
