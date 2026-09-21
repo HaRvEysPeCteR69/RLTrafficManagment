@@ -18,13 +18,37 @@ This is the standard form cited throughout the QPSO literature -- not a
 simplified variant. Both variants below (fixed_beta_qpso, va_qpso) share this
 exact core loop; they differ ONLY in how `beta` is computed each iteration.
 
-Convergence / stopping criterion: fitness-plateau early stopping. The swarm
-always runs at least `patience` iterations, then stops as soon as
-global_best has failed to improve by more than `tol` for `patience`
-consecutive iterations, or after `max_iterations`, whichever comes first.
-This is chosen over a fixed iteration count so replan() doesn't keep
-spinning once the swarm has converged, while `max_iterations` still bounds
-the worst case.
+Restart-on-stagnation
+---------------------
+The update equations above are used exactly as published. What is layered on
+top is a restart strategy, applied identically to BOTH beta variants so the
+fixed-beta vs volatility-adaptive comparison stays fair.
+
+Motivation (measured, see validate_brute_force.py): a single uninterrupted
+run contracts toward mbest/gbest until the random keys concentrate so tightly
+that argsort keeps decoding the same family of orderings. On a 6-stop case
+the swarm reached only 26-30% of the 720 possible orderings across 6000
+evaluations -- where uniform random sampling covers 100% on the same budget
+-- and stayed trapped at a local optimum even when run for 1000 iterations
+with stopping disabled. It was trapped, not truncated, so a bigger iteration
+budget does not help.
+
+On stagnation (global_best not improved by more than `tol` for `patience`
+consecutive iterations) the swarm is re-initialized: fresh uniform random
+positions, cleared personal bests, and a cleared global_best. Each such
+restart cycle is therefore a full, untouched QPSO run in its own right; the
+best solution found across ALL cycles is tracked separately and returned.
+Clearing global_best matters: on a held-out sweep of seeds 30-129 on the
+6-stop case, retaining it as a surviving attractor found the true optimum in
+95/100 runs versus 100/100 when cleared (both with restarts unlimited within
+a 200-iteration budget). Under this module's shipped max_restarts=5 default
+the same sweep gives 98/100 for va_qpso and 99/100 for fixed_beta_qpso.
+
+Termination: the run ends after `max_restarts` consecutive restart cycles
+fail to improve the across-cycle best, or when `max_iterations` total
+iterations are consumed, whichever comes first. Note `t` in beta(t) is the
+GLOBAL iteration index, so fixed_beta_qpso's linear anneal still spans the
+whole budget rather than resetting each cycle.
 """
 
 from typing import Callable, Dict, List, Optional, Tuple
@@ -48,24 +72,33 @@ def _run_qpso(
     seed: Optional[int],
     patience: int,
     tol: float,
+    max_restarts: int,
 ) -> Tuple[np.ndarray, float]:
     """
-    Shared QPSO core loop (Sun, Feng & Xu, 2004) -- see module docstring for
-    the exact update equations. Both fixed_beta_qpso and va_qpso call this
-    with different `beta_fn` implementations and nothing else differs.
+    Shared QPSO core loop (Sun, Feng & Xu, 2004) with restart-on-stagnation
+    -- see module docstring for the exact update equations and the restart
+    rationale. Both fixed_beta_qpso and va_qpso call this with different
+    `beta_fn` implementations and nothing else differs.
 
     Returns:
-        (global_best position, global_best fitness).
+        (best position across all restart cycles, its fitness).
     """
     rng = np.random.default_rng(seed)
 
-    positions = rng.uniform(bounds[0], bounds[1], (num_particles, dim))
-    personal_best = np.copy(positions)
-    personal_best_scores = np.full(num_particles, np.inf)
+    def fresh_swarm():
+        positions = rng.uniform(bounds[0], bounds[1], (num_particles, dim))
+        return positions, np.copy(positions), np.full(num_particles, np.inf)
+
+    positions, personal_best, personal_best_scores = fresh_swarm()
     global_best = np.zeros(dim)
     global_best_score = np.inf
 
+    # Elite record across all restart cycles -- this is what gets returned.
+    best_position = np.zeros(dim)
+    best_score = np.inf
+
     iterations_since_improvement = 0
+    unproductive_restarts = 0
 
     for t in range(max_iterations):
         # 1. Evaluate fitness, update personal_best / global_best.
@@ -78,10 +111,23 @@ def _run_qpso(
                 global_best_score = score
                 global_best = np.copy(positions[i])
                 iterations_since_improvement = 0
+            if score < best_score - tol:
+                best_score = score
+                best_position = np.copy(positions[i])
+                unproductive_restarts = 0
 
-        # Fitness-plateau stopping criterion (see module docstring).
-        if t >= patience and iterations_since_improvement >= patience:
-            break
+        # Restart-on-stagnation (see module docstring). The swarm is cleared
+        # entirely, global_best included, so the next cycle is an untouched
+        # QPSO run rather than one still anchored to the stale incumbent.
+        if iterations_since_improvement >= patience:
+            if unproductive_restarts >= max_restarts:
+                break
+            positions, personal_best, personal_best_scores = fresh_swarm()
+            global_best = np.zeros(dim)
+            global_best_score = np.inf
+            iterations_since_improvement = 0
+            unproductive_restarts += 1
+            continue
         iterations_since_improvement += 1
 
         # 2. mbest_d = mean personal best across the swarm, per dimension.
@@ -101,7 +147,7 @@ def _run_qpso(
         positions = p + sign * beta * np.abs(mbest - positions) * np.log(1.0 / u)
         positions = np.clip(positions, bounds[0], bounds[1])
 
-    return global_best, global_best_score
+    return best_position, best_score
 
 
 def fixed_beta_qpso(
@@ -115,6 +161,7 @@ def fixed_beta_qpso(
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
+    max_restarts: int = 5,
 ) -> Tuple[np.ndarray, float]:
     """
     Standard linear-anneal beta baseline, used throughout the QPSO literature
@@ -129,7 +176,7 @@ def fixed_beta_qpso(
     def beta_fn(t: int) -> float:
         return beta_max - (beta_max - beta_min) * (t / max_iterations)
 
-    return _run_qpso(dim, fitness_fn, beta_fn, num_particles, max_iterations, bounds, seed, patience, tol)
+    return _run_qpso(dim, fitness_fn, beta_fn, num_particles, max_iterations, bounds, seed, patience, tol, max_restarts)
 
 
 # --- va_qpso: volatility-adaptive beta (this project's contribution) ------
@@ -163,6 +210,7 @@ def va_qpso(
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
+    max_restarts: int = 5,
 ) -> Tuple[np.ndarray, float]:
     """
     beta = beta_min + (beta_max - beta_min) * volatility_index
@@ -180,7 +228,7 @@ def va_qpso(
     def beta_fn(t: int) -> float:
         return beta
 
-    return _run_qpso(dim, fitness_fn, beta_fn, num_particles, max_iterations, bounds, seed, patience, tol)
+    return _run_qpso(dim, fitness_fn, beta_fn, num_particles, max_iterations, bounds, seed, patience, tol, max_restarts)
 
 
 def replan(
@@ -196,6 +244,7 @@ def replan(
     seed: Optional[int] = None,
     patience: int = 15,
     tol: float = 1e-6,
+    max_restarts: int = 5,
 ) -> Tuple[np.ndarray, float]:
     """
     Run va_qpso to convergence (see module docstring for the stopping
@@ -242,6 +291,7 @@ def replan(
         seed=seed,
         patience=patience,
         tol=tol,
+        max_restarts=max_restarts,
     )
     best_order = decode_order(best_position)
     return best_order, best_score
