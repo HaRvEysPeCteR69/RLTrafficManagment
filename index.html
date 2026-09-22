@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adaptive Route Replay</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b1220; color: #e7edf7; }
+    main { min-height: 100vh; display: grid; grid-template-rows: auto auto minmax(440px, 1fr) auto; }
+    header, .controls { padding: 14px clamp(16px, 4vw, 42px); background: #111b2e; }
+    header { display: flex; gap: 20px; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #25324a; }
+    h1 { margin: 0; font-size: clamp(1.05rem, 2vw, 1.35rem); }
+    #status { color: #aebbd0; font-size: .9rem; }
+    .replay-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); min-height: 440px; }
+    #map { height: min(70vh, 760px); min-height: 440px; width: 100%; background: #17243a; }
+    .event-panel { display: flex; min-height: 0; flex-direction: column; padding: 18px; background: #0e1728; border-left: 1px solid #25324a; }
+    .event-panel h2 { margin: 0; font-size: 1rem; }
+    .event-panel > p { margin: 5px 0 14px; color: #aebbd0; font-size: .82rem; line-height: 1.35; }
+    .event-feed { display: grid; flex: 1; gap: 9px; min-height: 0; overflow-y: auto; padding-right: 4px; }
+    .event-empty { margin: auto 0; color: #91a1b9; font-size: .88rem; text-align: center; }
+    .event-item { display: grid; grid-template-columns: 23px minmax(0, 1fr); gap: 8px; padding: 10px; border: 1px solid #2b3c5b; border-radius: 8px; background: #152139; animation: event-arrive 180ms ease-out; }
+    .event-icon { font-size: 1rem; line-height: 1.25; }
+    .event-time { display: block; margin-bottom: 3px; color: #9bacca; font-size: .72rem; font-variant-numeric: tabular-nums; }
+    .event-detail { color: #edf3fc; font-size: .86rem; line-height: 1.38; }
+    @keyframes event-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .comparison-view { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #25324a; }
+    .comparison-view[hidden], .replay-layout[hidden] { display: none; }
+    .comparison-card { min-width: 0; background: #0e1728; }
+    .comparison-card header { display: flex; padding: 11px 16px; background: #111b2e; border: 0; }
+    .comparison-card h2 { margin: 0; font-size: .95rem; }
+    .comparison-clock { color: #b9c6d9; font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .comparison-map { height: min(62vh, 650px); min-height: 360px; }
+    .comparison-card.finished header { box-shadow: inset 0 -3px var(--winner-color, #22c55e); }
+    .comparison-summary { grid-column: 1 / -1; padding: 13px 18px; background: #13213a; color: #eaf4ff; font-weight: 700; text-align: center; }
+    .comparison-summary strong { color: #74e0a1; }
+    .error-state { margin: 18px auto; max-width: 680px; padding: 20px; border: 1px solid #f59e0b; border-radius: 10px; background: #2a1d12; color: #fff1d6; text-align: center; }
+    .error-state h2 { margin: 0 0 7px; font-size: 1.1rem; }
+    .error-state p { margin: 0; color: #f7d9aa; line-height: 1.45; }
+    .intro-overlay { position: fixed; z-index: 2000; inset: 0; display: grid; place-items: center; padding: 20px; background: #050a14c9; }
+    .intro-overlay[hidden] { display: none; }
+    .intro-dialog { width: min(540px, 100%); padding: clamp(22px, 5vw, 34px); border: 1px solid #435b81; border-radius: 14px; background: #111d31; box-shadow: 0 18px 50px #000b; }
+    .intro-dialog h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    .intro-dialog p { margin: 9px 0; color: #d4deed; line-height: 1.5; }
+    .intro-dialog button { margin-top: 16px; background: #2463a7; font-weight: 700; }
+    .help-button { position: fixed; z-index: 1000; right: 16px; bottom: 16px; width: 34px; height: 34px; padding: 0; border-radius: 50%; font-size: 1rem; font-weight: 800; }
+    .metrics-panel { display: grid; grid-template-columns: minmax(210px, 1.4fr) minmax(130px, .8fr) minmax(210px, 1.4fr) minmax(130px, .8fr); gap: 12px; padding: 14px clamp(16px, 4vw, 42px); background: #0e1728; border-bottom: 1px solid #25324a; }
+    .metric-card { min-width: 0; padding: 11px 13px; border: 1px solid #253a59; border-radius: 9px; background: #141f34; }
+    .metric-name { display: flex; align-items: center; gap: 5px; color: #b9c6d9; font-size: .82rem; }
+    .metric-value { margin-top: 5px; font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .gauge { height: 9px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: linear-gradient(90deg, #22c55e 0%, #facc15 50%, #ef4444 100%); }
+    .gauge-fill { height: 100%; width: 0; background: transparent; border-right: 2px solid white; transition: width 120ms linear; }
+    .tier-badge { display: inline-block; margin-top: 9px; padding: 5px 9px; border-radius: 999px; background: var(--tier-color, #4fc3f7); color: #08111f; font-weight: 800; font-size: .9rem; }
+    .info { position: relative; display: inline-grid; width: 17px; height: 17px; padding: 0; place-items: center; border: 1px solid #71809b; border-radius: 50%; background: transparent; color: #d8e2f2; font-size: .7rem; font-weight: 800; line-height: 1; }
+    .info:hover, .info:focus, .info[data-open="true"] { background: #2d4265; }
+    .tooltip { position: absolute; z-index: 1200; top: 23px; left: -8px; display: none; width: 230px; padding: 9px; border: 1px solid #40557a; border-radius: 7px; background: #09101d; color: #edf3fc; font: 400 .78rem/1.35 Inter, ui-sans-serif, system-ui, sans-serif; text-align: left; box-shadow: 0 5px 16px #0008; }
+    .info:hover .tooltip, .info:focus .tooltip, .info[data-open="true"] .tooltip { display: block; }
+    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-top: 1px solid #25324a; }
+    .scrub-control { display: flex; flex: 1 1 220px; align-items: center; gap: 8px; color: #c9d5e6; font-size: .88rem; }
+    .scrub-control input { flex: 1; accent-color: #4fc3f7; }
+    button { border: 1px solid #3c4c69; border-radius: 7px; color: inherit; background: #1b2941; padding: 8px 12px; cursor: pointer; }
+    button:hover { background: #263a5c; }
+    .legend { display: flex; gap: 6px; align-items: center; margin-left: auto; color: #b9c6d9; font-size: .88rem; }
+    .swatch { width: 10px; height: 10px; border-radius: 50%; background: var(--tier-color, #4fc3f7); }
+    .stop-pin { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #f8fafc; border: 3px solid #17243a; color: #17243a; display: grid; place-items: center; font-weight: 800; box-shadow: 0 2px 7px #0007; }
+    .stop-pin span { transform: rotate(45deg); }
+    .vehicle { width: 25px; height: 25px; border: 3px solid white; border-radius: 50%; background: var(--tier-color, #4fc3f7); box-shadow: 0 1px 8px #0009; display: grid; place-items: center; font-size: 13px; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { color: #14213a; }
+    @media (max-width: 900px) { .metrics-panel { grid-template-columns: 1fr 1fr; } .replay-layout, .comparison-view { grid-template-columns: 1fr; } .event-panel { max-height: 280px; border-top: 1px solid #25324a; border-left: 0; } .comparison-summary { grid-column: auto; } }
+    @media (max-width: 560px) { .metrics-panel { grid-template-columns: 1fr; } .legend { width: 100%; margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Adaptive delivery route replay</h1>
+      <span id="status" aria-live="polite">Loading route…</span>
+    </header>
+    <section class="metrics-panel" aria-label="Live traffic and route metrics">
+      <article class="metric-card" title="Technical term: volatility index">
+        <div class="metric-name">Traffic unpredictability
+          <button class="info" type="button" aria-label="About traffic unpredictability" aria-expanded="false">i<span class="tooltip" role="tooltip">How much traffic conditions have been changing recently. Higher means more chaotic.</span></button>
+        </div>
+        <div class="metric-value" id="unpredictability-value">—</div>
+        <div class="gauge" role="progressbar" aria-label="Traffic unpredictability from 0 to 1" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="gauge-fill" id="unpredictability-gauge"></div></div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-name">Current traffic conditions</div>
+        <div class="tier-badge" id="tier-badge">Waiting</div>
+      </article>
+      <article class="metric-card" title="Technical term: beta (β)">
+        <div class="metric-name">How hard the system is searching right now
+          <button class="info" type="button" aria-label="About search aggressiveness" aria-expanded="false">i<span class="tooltip" role="tooltip">How broadly the system looks for a better route. It rises automatically when traffic gets less predictable.</span></button>
+        </div>
+        <div class="metric-value" id="search-value">—</div>
+      </article>
+      <article class="metric-card" title="Technical term: simulation time">
+        <div class="metric-name">Simulated clock</div>
+        <div class="metric-value" id="simulated-clock">00:00:00</div>
+      </article>
+    </section>
+    <section class="error-state" id="error-state" hidden aria-live="assertive">
+      <h2>Route replay could not load</h2>
+      <p id="error-message">Please check that the bundled demo data is available, then refresh the page.</p>
+    </section>
+    <section class="replay-layout" id="single-view">
+      <div id="map" aria-label="Map of the delivery route"></div>
+      <aside class="event-panel" aria-labelledby="event-feed-title">
+        <h2 id="event-feed-title">Route decisions</h2>
+        <p>Watch what the system changes and why as the trip unfolds.</p>
+        <div class="event-feed" id="event-feed" role="log" aria-live="polite" aria-label="Route decision events">
+          <p class="event-empty">Decisions will appear as the replay advances.</p>
+        </div>
+      </aside>
+    </section>
+    <section class="comparison-view" id="comparison-view" hidden aria-label="Adaptive and fixed route comparison">
+      <article class="comparison-card" id="adaptive-card">
+        <header><h2>Adaptive route</h2><span class="comparison-clock">Completion clock <time id="adaptive-clock">00:00:00</time></span></header>
+        <div class="comparison-map" id="adaptive-map" aria-label="Adaptive route map"></div>
+      </article>
+      <article class="comparison-card" id="fixed-card">
+        <header><h2>Fixed route</h2><span class="comparison-clock">Completion clock <time id="fixed-clock">00:00:00</time></span></header>
+        <div class="comparison-map" id="fixed-map" aria-label="Fixed route map"></div>
+      </article>
+      <div class="comparison-summary" id="comparison-summary">Loading matched route replay…</div>
+    </section>
+    <div class="controls">
+      <button id="play" type="button" disabled>Pause</button>
+      <button id="reset" type="button" disabled>Restart</button>
+      <button id="compare" type="button" disabled>Compare adaptive vs fixed</button>
+      <label>Playback speed <select id="speed" aria-label="Playback speed"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></label>
+      <label class="scrub-control">Replay progress <input id="scrub" type="range" min="0" max="0" value="0" step="0.1" disabled aria-label="Replay progress"></label>
+      <span class="legend"><i class="swatch"></i><span id="tier-label">Waiting for route data</span></span>
+    </div>
+  </main>
+  <button class="help-button" id="help" type="button" aria-label="Open replay guide">?</button>
+  <section class="intro-overlay" id="intro-overlay" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <div class="intro-dialog">
+      <h2 id="intro-title">Welcome to the route replay</h2>
+      <p>This delivery vehicle is visiting several stops while traffic changes around it.</p>
+      <p>Watch the traffic unpredictability number: a higher value means the roads are changing more quickly.</p>
+      <p>The Route decisions feed explains each route refresh or detour in everyday language.</p>
+      <p>Press play to watch the vehicle react as the trip unfolds.</p>
+      <button id="intro-start" type="button" disabled>Got it — show me</button>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    (() => {
+      const DELHI_BOUNDS = [[28.566854, 77.207774], [28.643491, 77.236146]];
+      const COLORS = { calm: '#22c55e', medium: '#f59e0b', chaotic: '#ef4444' };
+      const map = L.map('map', { zoomControl: true }).fitBounds(DELHI_BOUNDS);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      const status = document.querySelector('#status');
+      const playButton = document.querySelector('#play');
+      const resetButton = document.querySelector('#reset');
+      const compareButton = document.querySelector('#compare');
+      const speedSelect = document.querySelector('#speed');
+      const scrub = document.querySelector('#scrub');
+      const errorState = document.querySelector('#error-state');
+      const errorMessage = document.querySelector('#error-message');
+      const introOverlay = document.querySelector('#intro-overlay');
+      const introStart = document.querySelector('#intro-start');
+      const helpButton = document.querySelector('#help');
+      const tierLabel = document.querySelector('#tier-label');
+      const swatch = document.querySelector('.swatch');
+      const unpredictabilityValue = document.querySelector('#unpredictability-value');
+      const unpredictabilityGauge = document.querySelector('#unpredictability-gauge');
+      const tierBadge = document.querySelector('#tier-badge');
+      const searchValue = document.querySelector('#search-value');
+      const simulatedClock = document.querySelector('#simulated-clock');
+      const eventFeed = document.querySelector('#event-feed');
+      const singleView = document.querySelector('#single-view');
+      const comparisonView = document.querySelector('#comparison-view');
+      const comparisonSummary = document.querySelector('#comparison-summary');
+      let path = [], metrics = [], events = [], displayedEventCount = 0, routeLine, vehicle, playback = 0, animationFrame, playing = false, lastFrame;
+      let primaryRun, comparisonRun, comparisonVisuals, comparisonMode = false;
+
+      // The API can serve a selected bundle ID, e.g. index.html?run=high_seed42_va_qpso.
+      const runId = new URLSearchParams(location.search).get('run') || 'high_seed42_va_qpso';
+
+      const normalTier = value => {
+        if (value === 'calm') return 'calm';
+        if (value === 'changing' || value === 'medium' || value === 'moderate') return 'medium';
+        return 'chaotic'; // exporter emits "volatile"; the UI presents it as chaotic.
+      };
+      const tierName = tier => ({ calm: 'Calm', medium: 'Moderate', chaotic: 'Chaotic' })[tier];
+      const markerIcon = number => L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 28], html: `<div class="stop-pin"><span>${number}</span></div>` });
+      const vehicleIcon = () => L.divIcon({ className: '', iconSize: [25, 25], iconAnchor: [12, 12], html: '<div class="vehicle" aria-label="Delivery vehicle">▸</div>' });
+      const formatClock = seconds => {
+        const wholeSeconds = Math.max(0, Math.round(seconds));
+        const hours = String(Math.floor(wholeSeconds / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor(wholeSeconds % 3600 / 60)).padStart(2, '0');
+        return `${hours}:${minutes}:${String(wholeSeconds % 60).padStart(2, '0')}`;
+      };
+      const introWasSeen = sessionStorage.getItem('route-replay-intro-seen') === 'true';
+      if (introWasSeen) introOverlay.hidden = true;
+
+      function showError(message) {
+        playing = false;
+        cancelAnimationFrame(animationFrame);
+        errorMessage.textContent = message;
+        errorState.hidden = false;
+        status.textContent = 'Route replay unavailable';
+        introOverlay.hidden = true;
+      }
+
+      function updateScrub() {
+        if (!primaryRun) return;
+        scrub.max = activeEnd();
+        scrub.value = Math.min(playback, Number(scrub.max));
+      }
+
+      function setPlaybackTime(time) {
+        const nextTime = Math.max(0, Math.min(Number(time), activeEnd()));
+        if (!comparisonMode && nextTime < playback) clearEventFeed();
+        playback = nextTime;
+        renderActive(playback);
+        updateScrub();
+      }
+
+      function openIntro() {
+        if (playing) { playing = false; cancelAnimationFrame(animationFrame); playButton.textContent = 'Play'; }
+        introOverlay.hidden = false;
+        introStart.disabled = !primaryRun;
+      }
+
+      function closeIntroAndPlay() {
+        introOverlay.hidden = true;
+        sessionStorage.setItem('route-replay-intro-seen', 'true');
+        if (primaryRun) start();
+      }
+
+      function clearEventFeed() {
+        displayedEventCount = 0;
+        eventFeed.replaceChildren();
+        const empty = document.createElement('p');
+        empty.className = 'event-empty';
+        empty.textContent = 'Decisions will appear as the replay advances.';
+        eventFeed.append(empty);
+      }
+
+      function appendEvent(event) {
+        eventFeed.querySelector('.event-empty')?.remove();
+        const item = document.createElement('article');
+        item.className = 'event-item';
+        const icon = document.createElement('span');
+        icon.className = 'event-icon';
+        icon.textContent = event.type === 'reroute' ? '↪️' : '🔄';
+        icon.setAttribute('aria-hidden', 'true');
+        const copy = document.createElement('div');
+        const time = document.createElement('time');
+        time.className = 'event-time';
+        time.textContent = `Simulated time ${formatClock(event.t)}`;
+        const detail = document.createElement('div');
+        detail.className = 'event-detail';
+        detail.textContent = event.detail || 'The route was updated.';
+        copy.append(time, detail);
+        item.append(icon, copy);
+        eventFeed.append(item);
+        eventFeed.scrollTop = eventFeed.scrollHeight;
+      }
+
+      function revealEventsThrough(t) {
+        while (displayedEventCount < events.length && events[displayedEventCount].t <= t) {
+          appendEvent(events[displayedEventCount]);
+          displayedEventCount += 1;
+        }
+      }
+
+      function metricAt(t, sourceMetrics = metrics) {
+        let active = sourceMetrics[0] || { tier: 'calm' };
+        for (const metric of sourceMetrics) { if (metric.t <= t) active = metric; else break; }
+        return active;
+      }
+
+      function positionAt(points, t) {
+        if (t <= points[0].t) return points[0];
+        if (t >= points[points.length - 1].t) return points[points.length - 1];
+        let low = 0, high = points.length - 1;
+        while (low + 1 < high) {
+          const middle = Math.floor((low + high) / 2);
+          if (points[middle].t <= t) low = middle; else high = middle;
+        }
+        const from = points[low], to = points[high];
+        const portion = (t - from.t) / (to.t - from.t);
+        return { lat: from.lat + (to.lat - from.lat) * portion, lon: from.lon + (to.lon - from.lon) * portion };
+      }
+
+      function render(t) {
+        const point = positionAt(path, t);
+        const metric = metricAt(t);
+        const tier = normalTier(metric.tier);
+        const color = COLORS[tier];
+        vehicle.setLatLng([point.lat, point.lon]);
+        routeLine.setStyle({ color });
+        vehicle.getElement()?.querySelector('.vehicle')?.style.setProperty('--tier-color', color);
+        swatch.style.setProperty('--tier-color', color);
+        tierLabel.textContent = `${tierName(tier)} traffic • ${Math.round(t)}s`;
+        const unpredictability = Math.max(0, Math.min(1, Number(metric.volatility_index) || 0));
+        const beta = Number(metric.beta);
+        unpredictabilityValue.textContent = unpredictability.toFixed(2);
+        unpredictabilityGauge.style.width = `${unpredictability * 100}%`;
+        unpredictabilityGauge.parentElement.setAttribute('aria-valuenow', unpredictability.toFixed(2));
+        tierBadge.textContent = tierName(tier);
+        tierBadge.style.setProperty('--tier-color', color);
+        searchValue.textContent = Number.isFinite(beta) ? beta.toFixed(2) : '—';
+        simulatedClock.textContent = formatClock(t);
+        revealEventsThrough(t);
+      }
+
+      const runEnd = run => Number(run.completion_time) || run.path[run.path.length - 1].t;
+      const formatDuration = seconds => `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+      const highestTrafficTier = runs => {
+        const observed = runs.flatMap(run => run.metrics_over_time || []);
+        const mostUnpredictable = observed.reduce((highest, metric) => Number(metric.volatility_index) > Number(highest.volatility_index) ? metric : highest, observed[0] || { tier: 'calm' });
+        return normalTier(mostUnpredictable.tier);
+      };
+
+      function renderComparison(t) {
+        for (const visual of comparisonVisuals) {
+          const end = runEnd(visual.run);
+          const runTime = Math.min(t, end);
+          const point = positionAt(visual.run.path, runTime);
+          const tier = normalTier(metricAt(runTime, visual.run.metrics_over_time).tier);
+          const color = COLORS[tier];
+          visual.vehicle.setLatLng([point.lat, point.lon]);
+          visual.route.setStyle({ color });
+          visual.vehicle.getElement()?.querySelector('.vehicle')?.style.setProperty('--tier-color', color);
+          visual.clock.textContent = formatClock(runTime);
+          visual.card.classList.toggle('finished', t >= end);
+          visual.card.style.setProperty('--winner-color', color);
+        }
+        const adaptiveEnd = runEnd(comparisonVisuals[0].run);
+        const fixedEnd = runEnd(comparisonVisuals[1].run);
+        const firstFinish = Math.min(adaptiveEnd, fixedEnd);
+        if (t >= firstFinish) {
+          const adaptiveWins = adaptiveEnd < fixedEnd;
+          const winner = adaptiveWins ? 'Adaptive route' : 'Fixed route';
+          const traffic = tierName(highestTrafficTier(comparisonVisuals.map(visual => visual.run))).toLowerCase();
+          comparisonSummary.innerHTML = `<strong>${winner}</strong> finished ${formatDuration(Math.abs(adaptiveEnd - fixedEnd))} faster in ${traffic} traffic.`;
+        } else {
+          comparisonSummary.textContent = 'Both routes are moving on the same simulated clock.';
+        }
+      }
+
+      function renderActive(t) {
+        // The top metrics and decision feed always follow the primary run;
+        // comparison maps then render their own markers on that same clock.
+        render(t);
+        if (comparisonMode) renderComparison(t);
+      }
+      function activeEnd() { return comparisonMode ? Math.max(...comparisonVisuals.map(visual => runEnd(visual.run))) : path[path.length - 1].t; }
+
+      function tick(now) {
+        if (lastFrame === undefined) lastFrame = now;
+        playback += ((now - lastFrame) / 1000) * Number(speedSelect.value);
+        lastFrame = now;
+        const end = activeEnd();
+        if (playback >= end) { playback = end; playing = false; playButton.textContent = 'Replay'; }
+        renderActive(playback);
+        updateScrub();
+        if (playing) animationFrame = requestAnimationFrame(tick);
+      }
+
+      function start() { if (!playing) { playing = true; playButton.textContent = 'Pause'; lastFrame = undefined; } cancelAnimationFrame(animationFrame); animationFrame = requestAnimationFrame(tick); }
+      playButton.addEventListener('click', () => {
+        if (playing) { playing = false; cancelAnimationFrame(animationFrame); playButton.textContent = 'Play'; return; }
+        if (playback >= activeEnd()) { clearEventFeed(); setPlaybackTime(0); }
+        start();
+      });
+      resetButton.addEventListener('click', () => { clearEventFeed(); setPlaybackTime(0); start(); });
+      scrub.addEventListener('input', () => setPlaybackTime(scrub.value));
+      helpButton.addEventListener('click', openIntro);
+      introStart.addEventListener('click', closeIntroAndPlay);
+      document.querySelectorAll('.info').forEach(info => {
+        info.addEventListener('click', event => {
+          event.stopPropagation();
+          const isOpen = info.dataset.open === 'true';
+          document.querySelectorAll('.info[data-open="true"]').forEach(button => { button.dataset.open = 'false'; button.setAttribute('aria-expanded', 'false'); });
+          if (!isOpen) { info.dataset.open = 'true'; info.setAttribute('aria-expanded', 'true'); }
+        });
+      });
+      document.addEventListener('click', () => document.querySelectorAll('.info[data-open="true"]').forEach(button => { button.dataset.open = 'false'; button.setAttribute('aria-expanded', 'false'); }));
+
+      function normalizeRun(run) {
+        if (!Array.isArray(run.path) || run.path.length < 2 || !Array.isArray(run.stops)) throw new Error('This run has no usable route path.');
+        return {
+          ...run,
+          path: [...run.path].sort((a, b) => a.t - b.t),
+          metrics_over_time: [...(run.metrics_over_time || [])].sort((a, b) => a.t - b.t),
+          events: [...(run.events || [])].sort((a, b) => a.t - b.t)
+        };
+      }
+
+      async function fetchRun(id) {
+        const apiPath = `/api/runs/${encodeURIComponent(id)}`;
+        try {
+          const response = await fetch(apiPath, { cache: 'no-store' });
+          if (response.ok) return normalizeRun(await response.json());
+        } catch (_) {
+          // A plain static server can still use the bundled JSON fallback below.
+        }
+        const bundledPath = `frontend_data/${encodeURIComponent(id)}.json`;
+        try {
+          const response = await fetch(bundledPath, { cache: 'no-store' });
+          if (response.ok) return normalizeRun(await response.json());
+        } catch (_) {
+          // The visible error state below gives the viewer the recovery path.
+        }
+        throw new Error('The demo data is not available yet. Start server.py, or place the exported hero JSON in frontend_data/.');
+      }
+
+      function pairedRunId() {
+        const requested = new URLSearchParams(location.search).get('compare');
+        if (requested) return requested;
+        if (runId.includes('va_qpso')) return runId.replace('va_qpso', 'fixed_beta_qpso');
+        if (runId.includes('fixed_beta_qpso')) return runId.replace('fixed_beta_qpso', 'va_qpso');
+        throw new Error('Choose a run ID containing its algorithm, or add ?compare=the-matched-run-id.');
+      }
+
+      function makeComparisonVisual(run, mapId, cardId, clockId) {
+        const comparisonMap = L.map(mapId, { zoomControl: true });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(comparisonMap);
+        run.stops.forEach((stop, index) => L.marker([stop.lat, stop.lon], { icon: markerIcon(index + 1) }).addTo(comparisonMap));
+        const route = L.polyline(run.path.map(point => [point.lat, point.lon]), { color: COLORS.calm, weight: 5, opacity: .88 }).addTo(comparisonMap);
+        const vehicleMarker = L.marker([run.path[0].lat, run.path[0].lon], { icon: vehicleIcon(), zIndexOffset: 1000 }).addTo(comparisonMap);
+        comparisonMap.fitBounds(route.getBounds(), { padding: [28, 28], maxZoom: 16 });
+        return { run, map: comparisonMap, route, vehicle: vehicleMarker, card: document.querySelector(cardId), clock: document.querySelector(clockId) };
+      }
+
+      async function toggleComparison() {
+        if (comparisonMode) {
+          comparisonMode = false;
+          comparisonView.hidden = true;
+          singleView.hidden = false;
+          compareButton.textContent = 'Compare adaptive vs fixed';
+          clearEventFeed();
+          map.invalidateSize();
+          setPlaybackTime(0);
+          start();
+          return;
+        }
+        try {
+          compareButton.disabled = true;
+          if (!comparisonRun) {
+            const candidate = await fetchRun(pairedRunId());
+            if (candidate.scenario !== primaryRun.scenario || String(candidate.seed) !== String(primaryRun.seed)) {
+              throw new Error('The two runs must use the same scenario and seed.');
+            }
+            const algorithms = new Set([primaryRun.algorithm, candidate.algorithm]);
+            if (!algorithms.has('va_qpso') || !algorithms.has('fixed_beta_qpso')) {
+              throw new Error('Comparison requires one adaptive and one fixed-beta run.');
+            }
+            comparisonRun = candidate;
+          }
+          comparisonMode = true;
+          singleView.hidden = true;
+          comparisonView.hidden = false;
+          compareButton.textContent = 'Show single route';
+          const adaptiveRun = primaryRun.algorithm === 'va_qpso' ? primaryRun : comparisonRun;
+          const fixedRun = primaryRun.algorithm === 'fixed_beta_qpso' ? primaryRun : comparisonRun;
+          if (!comparisonVisuals) {
+            comparisonVisuals = [
+              makeComparisonVisual(adaptiveRun, 'adaptive-map', '#adaptive-card', '#adaptive-clock'),
+              makeComparisonVisual(fixedRun, 'fixed-map', '#fixed-card', '#fixed-clock')
+            ];
+          }
+          comparisonVisuals.forEach(visual => visual.map.invalidateSize());
+          setPlaybackTime(0);
+          start();
+        } catch (error) {
+          status.textContent = `Comparison unavailable: ${error.message}`;
+          console.error('Matched comparison could not load.', error);
+        } finally {
+          compareButton.disabled = false;
+        }
+      }
+      compareButton.addEventListener('click', toggleComparison);
+
+      async function loadRun() {
+        try {
+          const run = await fetchRun(runId);
+          primaryRun = run;
+          path = run.path;
+          metrics = run.metrics_over_time;
+          events = run.events;
+          run.stops.forEach((stop, index) => L.marker([stop.lat, stop.lon], { icon: markerIcon(index + 1) }).addTo(map).bindPopup(stop.label || `Stop ${index + 1}`));
+          routeLine = L.polyline(path.map(point => [point.lat, point.lon]), { color: COLORS.calm, weight: 5, opacity: .88 }).addTo(map);
+          vehicle = L.marker([path[0].lat, path[0].lon], { icon: vehicleIcon(), zIndexOffset: 1000 }).addTo(map);
+          map.fitBounds(routeLine.getBounds(), { padding: [36, 36], maxZoom: 16 });
+          status.textContent = `${run.algorithm || 'Route'} • ${run.scenario || 'scenario'} • ${Math.round(run.completion_time || path.at(-1).t)}s`;
+          playButton.disabled = resetButton.disabled = compareButton.disabled = scrub.disabled = false;
+          clearEventFeed();
+          render(0);
+          updateScrub();
+          errorState.hidden = true;
+          introStart.disabled = false;
+          if (introOverlay.hidden) start();
+        } catch (error) {
+          showError(`We couldn't load this route replay. ${error.message}`);
+        }
+      }
+      loadRun();
+    })();
+  </script>
+</body>
+</html>
