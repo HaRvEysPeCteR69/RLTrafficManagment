@@ -687,6 +687,47 @@ def export_from_log_file(log_path: str, output_path: str, net_file: str = DEFAUL
     print(f"Parsed log {log_path} -> Saved frontend JSON to {out_file}")
 
 
+def start_server(port: int = 8000):
+    import http.server
+    import socketserver
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            # Serve /api/runs/{id}
+            if self.path.startswith("/api/runs/"):
+                run_id = self.path[len("/api/runs/"):]
+                if "?" in run_id:
+                    run_id = run_id.split("?")[0]
+                candidates = [
+                    Path(DEFAULT_FRONTEND_DIR) / run_id if run_id.endswith(".json") else None,
+                    Path(DEFAULT_FRONTEND_DIR) / f"{run_id}.json",
+                    Path(DEFAULT_FRONTEND_DIR) / f"hero_{run_id}.json",
+                    Path(DEFAULT_FRONTEND_DIR) / "hero_medium_va_qpso.json",
+                ]
+                for c in candidates:
+                    if c and c.exists():
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        with open(c, "rb") as f:
+                            self.wfile.write(f.read())
+                        return
+                self.send_error(404, f"Run not found: {run_id}")
+                return
+            super().do_GET()
+
+    print("\n" + "=" * 55)
+    print(f"Mission Control Web Server live at: http://localhost:{port}")
+    print(f"API endpoint available at: http://localhost:{port}/api/runs/<id>")
+    print("=" * 55 + "\n")
+    with socketserver.TCPServer(("", port), Handler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down server.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Export SUMO simulation data to frontend-friendly JSON")
     parser.add_argument("--log", type=str, default=None, help="Path to run_hybrid.py JSONL log file to convert")
@@ -698,9 +739,13 @@ def main():
     parser.add_argument("--export-heroes", action="store_true", help="Batch export all 3 hero scenarios with matched pairs")
     parser.add_argument("--hero-dir", type=str, default=DEFAULT_FRONTEND_DIR, help="Directory for hero exports")
     parser.add_argument("--net", type=str, default=DEFAULT_NET_FILE, help="Path to SUMO .net.xml file")
+    parser.add_argument("--serve", action="store_true", help="Start local HTTP server with /api/runs/{id} endpoint")
+    parser.add_argument("--port", type=int, default=8000, help="Port for local HTTP server")
     args = parser.parse_args()
 
-    if args.export_heroes:
+    if args.serve:
+        start_server(args.port)
+    elif args.export_heroes:
         export_heroes(args.hero_dir, net_file=args.net)
     elif args.log:
         out = args.output or str(Path(args.hero_dir) / "exported_from_log.json")
