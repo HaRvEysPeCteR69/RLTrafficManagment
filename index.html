@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QPSO Delivery Route Optimizer — Live Delhi Mission Control</title>
-  <meta name="description" content="Real-time interactive Leaflet visualization of Volatility-Adaptive QPSO delivery routing on Delhi Connaught Place network.">
+  <title>QPSO Delivery Route Optimizer — Delhi Mission Control</title>
+  <meta name="description" content="Real-time interactive Leaflet visualization and side-by-side comparison of Volatility-Adaptive QPSO delivery routing on Delhi road network.">
 
-  <!-- Google Fonts: Inter -->
+  <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,9 +16,9 @@
 
   <style>
     :root {
-      --bg-dark: #0a0e17;
-      --panel-bg: rgba(13, 19, 33, 0.85);
-      --panel-border: rgba(255, 255, 255, 0.08);
+      --bg-dark: #070c16;
+      --panel-bg: rgba(13, 22, 38, 0.88);
+      --panel-border: rgba(255, 255, 255, 0.09);
       --text-main: #f1f5f9;
       --text-muted: #94a3b8;
       --accent: #38bdf8;
@@ -45,6 +45,17 @@
       width: 100vw;
     }
 
+    /* Full View Containers */
+    #single-view {
+      position: relative;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #single-view[hidden], #comparison-view[hidden] {
+      display: none !important;
+    }
+
     #map {
       height: 100%;
       width: 100%;
@@ -52,12 +63,87 @@
       z-index: 1;
     }
 
+    /* Comparison Split Screen View */
+    #comparison-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: calc(100vh - 140px);
+      margin-top: 70px;
+      gap: 3px;
+      background: #1e293b;
+      z-index: 50;
+      position: relative;
+    }
+
+    .comparison-card {
+      display: flex;
+      flex-direction: column;
+      background: #0b1324;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .comparison-header {
+      padding: 12px 18px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .comparison-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comparison-clock {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .comparison-map-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: #080c14;
+    }
+
+    .comparison-banner {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      padding: 8px 16px;
+      background: rgba(16, 185, 129, 0.9);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      display: none;
+      white-space: nowrap;
+    }
+
+    .comparison-card.winner {
+      box-shadow: inset 0 0 0 3px #10b981;
+    }
+
     /* Top Navigation HUD */
     .top-bar {
       position: absolute;
-      top: 16px;
-      left: 16px;
-      right: 16px;
+      top: 14px;
+      left: 14px;
+      right: 14px;
       z-index: 1000;
       display: flex;
       justify-content: space-between;
@@ -67,7 +153,7 @@
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--panel-border);
       border-radius: 14px;
-      padding: 12px 20px;
+      padding: 10px 18px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
 
@@ -78,10 +164,10 @@
     }
 
     .brand-icon {
-      font-size: 24px;
+      font-size: 22px;
       background: linear-gradient(135deg, #0284c7, #38bdf8);
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -90,7 +176,7 @@
     }
 
     .brand-text h1 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: -0.01em;
       color: #fff;
@@ -105,13 +191,13 @@
     .scenario-controls {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     select, button {
       font-family: var(--font-main);
-      font-size: 13px;
-      background: rgba(255, 255, 255, 0.05);
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text-main);
       border: 1px solid var(--panel-border);
       border-radius: 8px;
@@ -119,10 +205,13 @@
       outline: none;
       cursor: pointer;
       transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     select:hover, button:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
       border-color: var(--accent);
     }
 
@@ -137,11 +226,22 @@
       box-shadow: 0 0 12px var(--accent-glow);
     }
 
+    button.compare-btn {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border-color: #a78bfa;
+      font-weight: 600;
+    }
+
+    button.compare-btn:hover {
+      background: linear-gradient(135deg, #4338ca, #6d28d9);
+      box-shadow: 0 0 14px rgba(167, 139, 250, 0.4);
+    }
+
     /* Floating Stats Card (Left Side) */
     .hud-panel {
       position: absolute;
-      top: 90px;
-      left: 16px;
+      top: 80px;
+      left: 14px;
       z-index: 1000;
       width: 320px;
       background: var(--panel-bg);
@@ -153,7 +253,7 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
 
     .panel-header {
@@ -165,7 +265,7 @@
     }
 
     .panel-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -215,9 +315,17 @@
 
     .metric-card {
       background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 8px;
       padding: 10px;
+      position: relative;
+    }
+
+    .metric-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
     }
 
     .metric-label {
@@ -225,24 +333,63 @@
       color: var(--text-muted);
       text-transform: uppercase;
       font-weight: 600;
-      margin-bottom: 4px;
     }
 
     .metric-value {
-      font-size: 18px;
+      font-size: 17px;
       font-family: var(--font-mono);
       font-weight: 700;
       color: #fff;
     }
 
+    /* Info Tooltip */
+    .info-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid #64748b;
+      color: #94a3b8;
+      font-size: 9px;
+      font-weight: bold;
+      background: transparent;
+      padding: 0;
+      cursor: help;
+    }
+
+    .tooltip-content {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 180px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.35;
+      z-index: 2000;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      font-weight: normal;
+      text-transform: none;
+    }
+
+    .metric-card:hover .tooltip-content {
+      display: block;
+    }
+
     /* Live Event Ticker */
     .event-ticker {
       font-size: 12px;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.35);
       border-left: 3px solid var(--accent);
-      padding: 8px 12px;
+      padding: 10px 12px;
       border-radius: 0 6px 6px 0;
-      min-height: 48px;
+      min-height: 52px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -258,32 +405,33 @@
     .event-desc {
       color: #e2e8f0;
       line-height: 1.3;
+      font-size: 11px;
     }
 
     /* Bottom Playback Control Bar */
     .bottom-bar {
       position: absolute;
-      bottom: 20px;
+      bottom: 18px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
-      width: min(720px, calc(100vw - 32px));
+      width: min(760px, calc(100vw - 28px));
       background: var(--panel-bg);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--panel-border);
       border-radius: 16px;
-      padding: 14px 20px;
+      padding: 12px 18px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
 
     .playback-row {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
     }
 
     .timeline-slider {
@@ -310,9 +458,9 @@
 
     .time-display {
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-muted);
-      min-width: 90px;
+      min-width: 95px;
       text-align: right;
     }
 
@@ -321,8 +469,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       background: #0f172a;
       border: 2px solid var(--accent);
@@ -356,11 +504,99 @@
       background: var(--tier-turbulent);
       box-shadow: 0 0 20px var(--tier-turbulent);
     }
+
+    /* Onboarding Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 3000;
+      background: rgba(4, 8, 16, 0.78);
+      backdrop-filter: blur(8px);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .modal-overlay[hidden] {
+      display: none;
+    }
+
+    .modal-card {
+      width: min(520px, 100%);
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-card h2 {
+      font-size: 18px;
+      color: #fff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-card p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+
+    .modal-card ul {
+      margin: 12px 0 18px 20px;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .modal-card ul li strong {
+      color: #38bdf8;
+    }
+
+    .modal-card button {
+      width: 100%;
+      padding: 10px;
+      font-size: 13px;
+      background: #0284c7;
+      border-color: #38bdf8;
+      font-weight: 700;
+      justify-content: center;
+    }
+
+    /* Floating Help Button */
+    .btn-help {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2500;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #38bdf8;
+      font-size: 15px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-help:hover {
+      background: #334155;
+      transform: scale(1.06);
+    }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation & Scenario Bar -->
+  <!-- Top Navigation & Controls Bar -->
   <header class="top-bar">
     <div class="brand-section">
       <div class="brand-icon">🚚</div>
@@ -378,13 +614,14 @@
         <option value="hero_low_va_qpso">Low Volatility (Off-Peak) — VA-QPSO</option>
         <option value="hero_low_fixed_beta_qpso">Low Volatility (Off-Peak) — Fixed Beta</option>
       </select>
+      <button id="btn-toggle-compare" class="compare-btn">⚔️ Compare Adaptive vs Fixed</button>
       <button id="btn-reset-view">📍 Center Map</button>
       <button id="btn-toggle-tiles">🌓 Map Style</button>
     </div>
   </header>
 
-  <!-- Left Stats & Telemetry HUD -->
-  <aside class="hud-panel">
+  <!-- Left Stats & Telemetry HUD (Single Mode) -->
+  <aside id="telemetry-hud" class="hud-panel">
     <div class="panel-header">
       <span class="panel-title">Traffic Telemetry</span>
       <div id="tier-badge" class="tier-badge">
@@ -395,12 +632,20 @@
 
     <div class="metrics-grid">
       <div class="metric-card">
-        <div class="metric-label">Volatility (V)</div>
+        <div class="metric-label-row">
+          <span class="metric-label">Volatility (V)</span>
+          <span class="info-btn">i</span>
+        </div>
         <div id="metric-volatility" class="metric-value">0.0000</div>
+        <div class="tooltip-content">Traffic unpredictability index [0 to 1]. Measures speed variance across the network.</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Beta (&beta;)</div>
+        <div class="metric-label-row">
+          <span class="metric-label">Beta (&beta;)</span>
+          <span class="info-btn">i</span>
+        </div>
         <div id="metric-beta" class="metric-value">0.5000</div>
+        <div class="tooltip-content">Quantum search aggressiveness (potential well width). Automatically expands during traffic turbulence.</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Route Time</div>
@@ -408,12 +653,12 @@
       </div>
       <div class="metric-card">
         <div class="metric-label">Algorithm</div>
-        <div id="metric-algorithm" class="metric-value" style="font-size: 14px;">VA-QPSO</div>
+        <div id="metric-algorithm" class="metric-value" style="font-size: 13px;">VA-QPSO</div>
       </div>
     </div>
 
     <div class="panel-header" style="margin-top: 4px;">
-      <span class="panel-title">Mission Event Stream</span>
+      <span class="panel-title">Decision Event Stream</span>
     </div>
     <div class="event-ticker">
       <div id="event-time" class="event-time">T = 0s [Ready]</div>
@@ -421,10 +666,32 @@
     </div>
   </aside>
 
-  <!-- Map Canvas -->
-  <div id="map"></div>
+  <!-- Single Route Map View -->
+  <main id="single-view">
+    <div id="map"></div>
+  </main>
 
-  <!-- Bottom Playback Timeline -->
+  <!-- Split Comparison Dual View -->
+  <section id="comparison-view" hidden>
+    <div id="card-adaptive" class="comparison-card">
+      <header class="comparison-header">
+        <span class="comparison-title">⚡ Adaptive VA-QPSO (Reactive Swarm)</span>
+        <span id="clock-adaptive" class="comparison-clock">0.0s / --s</span>
+      </header>
+      <div id="map-adaptive" class="comparison-map-container"></div>
+      <div id="banner-adaptive" class="comparison-banner">🏆 Adaptive Route Finished Faster!</div>
+    </div>
+    <div id="card-fixed" class="comparison-card">
+      <header class="comparison-header">
+        <span class="comparison-title">⏱️ Fixed-Beta QPSO (Static Baseline)</span>
+        <span id="clock-fixed" class="comparison-clock">0.0s / --s</span>
+      </header>
+      <div id="map-fixed" class="comparison-map-container"></div>
+      <div id="banner-fixed" class="comparison-banner">Completed</div>
+    </div>
+  </section>
+
+  <!-- Bottom Playback Timeline Dock -->
   <footer class="bottom-bar">
     <div class="playback-row">
       <button id="btn-play-pause" class="primary">▶ Play</button>
@@ -435,71 +702,41 @@
         <option value="0.5">0.5x</option>
         <option value="1.0" selected>1.0x</option>
         <option value="2.0">2.0x</option>
+        <option value="4.0">4.0x</option>
         <option value="5.0">5.0x</option>
       </select>
     </div>
   </footer>
+
+  <!-- Help floating button -->
+  <button id="btn-open-intro" class="btn-help" title="Demo Explanation Guide">?</button>
+
+  <!-- Intro Onboarding Modal -->
+  <div id="intro-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>🚚 Mission Control Quickstart</h2>
+      <p>Welcome to the <strong>Delhi QPSO Delivery Route Optimizer</strong> simulation demo. Here is what to observe:</p>
+      <ul>
+        <li><strong>8 Stop Delivery Tour:</strong> Couriers serve destinations across the Connaught Place network.</li>
+        <li><strong>Traffic Volatility Tracking:</strong> Real-time variance in road traffic conditions dictates when and how hard the quantum swarm searches for detours.</li>
+        <li><strong>⚔️ Side-by-Side Comparison:</strong> Click <em>"Compare Adaptive vs Fixed"</em> to watch both algorithms race simultaneously on identical traffic seeds!</li>
+      </ul>
+      <button id="btn-close-intro" class="primary">Got it — Start Demo</button>
+    </div>
+  </div>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script>
     // -------------------------------------------------------------
-    // Configuration & Delhi Connaught Place Bounding Box
+    // Configuration & Delhi Connaught Place Coordinates
     // -------------------------------------------------------------
     const DELHI_BBOX = [
       [28.625885, 77.215730], // South-West
       [28.641579, 77.236486]  // North-East
     ];
     const MAP_CENTER = [28.6325, 77.2215];
-
-    // Map initialization
-    const map = L.map('map', {
-      zoomControl: false,
-      attributionControl: false
-    }).setView(MAP_CENTER, 15);
-
-    L.control.zoom({ position: 'topright' }).addTo(map);
-
-    // Tile Layers
-    const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd'
-    }).addTo(map);
-
-    const osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    });
-
-    let currentTileMode = 'dark';
-    document.getElementById('btn-toggle-tiles').addEventListener('click', () => {
-      if (currentTileMode === 'dark') {
-        map.removeLayer(darkTiles);
-        osmTiles.addTo(map);
-        currentTileMode = 'osm';
-      } else {
-        map.removeLayer(osmTiles);
-        darkTiles.addTo(map);
-        currentTileMode = 'dark';
-      }
-    });
-
-    document.getElementById('btn-reset-view').addEventListener('click', () => {
-      map.fitBounds(DELHI_BBOX);
-    });
-
-    // -------------------------------------------------------------
-    // State & Layers
-    // -------------------------------------------------------------
-    let stopMarkers = [];
-    let routePolyline = null;
-    let vehicleMarker = null;
-    let currentRunData = null;
-    let isPlaying = false;
-    let playbackTime = 0.0;
-    let playbackSpeed = 1.0;
-    let lastAnimTimestamp = null;
-    let animFrameId = null;
 
     const tierColors = {
       calm: '#10b981',
@@ -508,78 +745,182 @@
     };
 
     // -------------------------------------------------------------
-    // Data Loading with /api/runs/{id} fallback to frontend_data
+    // Map State & Layers
+    // -------------------------------------------------------------
+    let map = null;
+    let darkTiles = null;
+    let osmTiles = null;
+    let currentTileMode = 'dark';
+
+    let stopMarkers = [];
+    let routePolyline = null;
+    let vehicleMarker = null;
+
+    let currentRunData = null;
+    let isPlaying = false;
+    let playbackTime = 0.0;
+    let playbackSpeed = 1.0;
+    let lastAnimTimestamp = null;
+    let animFrameId = null;
+
+    // Comparison Mode State
+    let isComparisonMode = false;
+    let mapAdaptive = null;
+    let mapFixed = null;
+    let adaptiveRunData = null;
+    let fixedRunData = null;
+    let adaptiveVisual = null;
+    let fixedVisual = null;
+
+    // -------------------------------------------------------------
+    // Initialization of Main Map
+    // -------------------------------------------------------------
+    function initMainMap() {
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(MAP_CENTER, 15);
+
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(map);
+
+      osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      });
+    }
+
+    initMainMap();
+
+    // -------------------------------------------------------------
+    // Data Loading with Resilient Fallback
     // -------------------------------------------------------------
     async function fetchRunData(runId) {
-      // 1. Try specified API endpoint
-      try {
-        const res = await fetch(`/api/runs/${runId}`);
-        if (res.ok) return await res.json();
-      } catch (err) {
-        console.warn(`Could not reach /api/runs/${runId}, attempting static fallback...`);
-      }
-
-      // 2. Fallback to bundled local JSON in frontend_data/
-      const fallbackUrls = [
-        `frontend_data/${runId}.json`,
-        `frontend_data/hero_${runId}.json`,
-        `frontend_data/hero_medium_va_qpso.json`
+      const cleanId = runId.replace(/\.json$/, '');
+      const candidateUrls = [
+        `/api/runs/${cleanId}`,
+        `/api/runs/hero_${cleanId}`,
+        `frontend_data/${cleanId}.json`,
+        `frontend_data/hero_${cleanId}.json`,
+        `frontend_data/hero_${cleanId}_va_qpso.json`,
       ];
 
-      for (const url of fallbackUrls) {
+      for (const url of candidateUrls) {
         try {
-          const res = await fetch(url);
-          if (res.ok) return await res.json();
-        } catch (e) {}
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            return normalizeRunData(data);
+          }
+        } catch (e) {
+          // Continue to next candidate
+        }
       }
 
-      throw new Error(`Failed to load scenario data for ID: ${runId}`);
+      // Final fallback attempt
+      try {
+        const fallbackRes = await fetch('frontend_data/hero_medium_va_qpso.json');
+        if (fallbackRes.ok) return normalizeRunData(await fallbackRes.json());
+      } catch (_) {}
+
+      throw new Error(`Could not load run data for: ${runId}`);
+    }
+
+    function normalizeRunData(data) {
+      return {
+        ...data,
+        path: (data.path || []).sort((a, b) => a.t - b.t),
+        metrics_over_time: (data.metrics_over_time || []).sort((a, b) => a.t - b.t),
+        events: (data.events || []).sort((a, b) => a.t - b.t),
+        completion_time: data.completion_time || (data.path && data.path.length ? data.path[data.path.length - 1].t : 100)
+      };
     }
 
     // -------------------------------------------------------------
-    // Render Stops & Route
+    // Interpolation Logic
     // -------------------------------------------------------------
-    function renderScenario(data) {
+    function getInterpolatedPosition(path, t) {
+      if (!path || path.length === 0) return null;
+      if (t <= path[0].t) return [path[0].lat, path[0].lon];
+      if (t >= path[path.length - 1].t) return [path[path.length - 1].lat, path[path.length - 1].lon];
+
+      let low = 0;
+      let high = path.length - 1;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (path[mid].t <= t) low = mid + 1;
+        else high = mid - 1;
+      }
+      const i = Math.max(0, high);
+      const p1 = path[i];
+      const p2 = path[Math.min(path.length - 1, i + 1)];
+
+      const dt = p2.t - p1.t;
+      const alpha = dt > 0 ? (t - p1.t) / dt : 0.0;
+      return [
+        p1.lat + alpha * (p2.lat - p1.lat),
+        p1.lon + alpha * (p2.lon - p1.lon)
+      ];
+    }
+
+    function getMetricsAtTime(metrics, t) {
+      if (!metrics || metrics.length === 0) return { volatility_index: 0, beta: 0.5, tier: 'calm' };
+      const idx = Math.min(metrics.length - 1, Math.max(0, Math.floor(t)));
+      return metrics[idx];
+    }
+
+    function getActiveEvent(events, t) {
+      if (!events || events.length === 0) return null;
+      let latest = null;
+      for (let i = 0; i < events.length; i++) {
+        if (events[i].t <= t) latest = events[i];
+        else break;
+      }
+      return latest;
+    }
+
+    // -------------------------------------------------------------
+    // Render Single Scenario
+    // -------------------------------------------------------------
+    function renderSingleScenario(data) {
       currentRunData = data;
 
-      // Clear previous layers
       stopMarkers.forEach(m => map.removeLayer(m));
       stopMarkers = [];
       if (routePolyline) map.removeLayer(routePolyline);
       if (vehicleMarker) map.removeLayer(vehicleMarker);
 
-      // 1. Draw Numbered Stop Pin Markers
+      // 1. Numbered Stop Markers
       if (data.stops && data.stops.length > 0) {
         data.stops.forEach((stop, idx) => {
           const pinIcon = L.divIcon({
             className: 'custom-pin',
             html: `<div class="stop-marker-pin">${idx + 1}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
           });
-
           const marker = L.marker([stop.lat, stop.lon], { icon: pinIcon })
-            .bindPopup(`<b>${stop.label || 'Stop ' + (idx + 1)}</b><br>Junction ID: ${stop.id}`)
+            .bindPopup(`<b>${stop.label || 'Stop ' + (idx + 1)}</b><br>Junction: ${stop.id}`)
             .addTo(map);
-
           stopMarkers.push(marker);
         });
       }
 
-      // 2. Draw Route Polyline from path coordinates
+      // 2. Route Polyline
       if (data.path && data.path.length > 0) {
         const polyCoords = data.path.map(p => [p.lat, p.lon]);
         routePolyline = L.polyline(polyCoords, {
           color: tierColors.calm,
           weight: 4,
-          opacity: 0.8,
-          smoothFactor: 1.0
+          opacity: 0.82
         }).addTo(map);
-
-        map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+        map.fitBounds(routePolyline.getBounds(), { padding: [45, 45] });
       }
 
-      // 3. Create Vehicle Marker
+      // 3. Courier Vehicle Marker
       const initialTier = (data.metrics_over_time && data.metrics_over_time[0]) ? data.metrics_over_time[0].tier : 'calm';
       const initialPos = data.path && data.path[0] ? [data.path[0].lat, data.path[0].lon] : MAP_CENTER;
 
@@ -590,81 +931,36 @@
         iconAnchor: [16, 16]
       });
 
-      vehicleMarker = L.marker(initialPos, { icon: vehicleIcon }).addTo(map);
+      vehicleMarker = L.marker(initialPos, { icon: vehicleIcon, zIndexOffset: 1000 }).addTo(map);
 
-      // Update UI Header Stats
+      // HUD Stats
       document.getElementById('metric-route-time').innerText = `${data.completion_time.toFixed(1)}s`;
       document.getElementById('metric-algorithm').innerText = data.algorithm === 'va_qpso' ? 'VA-QPSO' : 'Fixed Beta';
       document.getElementById('timeline').max = data.completion_time;
       document.getElementById('timeline').value = 0;
       document.getElementById('time-display').innerText = `0.0s / ${data.completion_time.toFixed(1)}s`;
 
-      // Reset playback
       playbackTime = 0.0;
       updatePlayback(0.0);
     }
 
     // -------------------------------------------------------------
-    // Hand-Written Position & Metric Interpolation (No Plugins)
+    // Update Playback Display
     // -------------------------------------------------------------
-    function getInterpolatedPosition(t) {
-      const path = currentRunData.path;
-      if (!path || path.length === 0) return null;
-      if (t <= path[0].t) return [path[0].lat, path[0].lon];
-      if (t >= path[path.length - 1].t) return [path[path.length - 1].lat, path[path.length - 1].lon];
-
-      // Binary search or linear scan for interval
-      let low = 0;
-      let high = path.length - 1;
-      while (low <= high) {
-        const mid = (low + high) >> 1;
-        if (path[mid].t <= t) {
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-      const i = Math.max(0, high);
-      const p1 = path[i];
-      const p2 = path[Math.min(path.length - 1, i + 1)];
-
-      const dt = p2.t - p1.t;
-      const alpha = dt > 0 ? (t - p1.t) / dt : 0.0;
-      const lat = p1.lat + alpha * (p2.lat - p1.lat);
-      const lon = p1.lon + alpha * (p2.lon - p1.lon);
-      return [lat, lon];
-    }
-
-    function getMetricsAtTime(t) {
-      const metrics = currentRunData.metrics_over_time;
-      if (!metrics || metrics.length === 0) return { volatility_index: 0, beta: 0.5, tier: 'calm' };
-      const idx = Math.min(metrics.length - 1, Math.max(0, Math.floor(t)));
-      return metrics[idx];
-    }
-
-    function getActiveEvent(t) {
-      const events = currentRunData.events;
-      if (!events || events.length === 0) return null;
-      // Return the most recent event up to time t
-      let latest = null;
-      for (let i = 0; i < events.length; i++) {
-        if (events[i].t <= t) latest = events[i];
-        else break;
-      }
-      return latest;
-    }
-
     function updatePlayback(t) {
+      if (isComparisonMode) {
+        updateComparisonPlayback(t);
+        return;
+      }
+
       if (!currentRunData) return;
 
-      // 1. Move vehicle marker
-      const pos = getInterpolatedPosition(t);
-      if (pos && vehicleMarker) {
-        vehicleMarker.setLatLng(pos);
-      }
+      // Move marker
+      const pos = getInterpolatedPosition(currentRunData.path, t);
+      if (pos && vehicleMarker) vehicleMarker.setLatLng(pos);
 
-      // 2. Query metrics and update tier colors
-      const metric = getMetricsAtTime(t);
+      // Update telemetry
+      const metric = getMetricsAtTime(currentRunData.metrics_over_time, t);
       document.getElementById('metric-volatility').innerText = metric.volatility_index.toFixed(4);
       document.getElementById('metric-beta').innerText = metric.beta.toFixed(4);
 
@@ -672,32 +968,178 @@
       const tierText = document.getElementById('tier-text');
       const vehicleInner = document.getElementById('vehicle-icon-inner');
 
-      tierBadge.className = `tier-badge ${metric.tier}`;
-      tierText.innerText = metric.tier.charAt(0).toUpperCase() + metric.tier.slice(1);
+      const tierKey = metric.tier || 'calm';
+      tierBadge.className = `tier-badge ${tierKey}`;
+      tierText.innerText = tierKey.charAt(0).toUpperCase() + tierKey.slice(1);
 
       if (vehicleInner) {
-        vehicleInner.className = `vehicle-courier-marker ${metric.tier}`;
+        vehicleInner.className = `vehicle-courier-marker ${tierKey}`;
       }
 
-      // Color route by tier
       if (routePolyline) {
-        routePolyline.setStyle({ color: tierColors[metric.tier] || tierColors.calm });
+        routePolyline.setStyle({ color: tierColors[tierKey] || tierColors.calm });
       }
 
-      // 3. Update active event stream
-      const activeEvent = getActiveEvent(t);
+      // Event stream
+      const activeEvent = getActiveEvent(currentRunData.events, t);
       if (activeEvent) {
-        document.getElementById('event-time').innerText = `T = ${activeEvent.t.toFixed(0)}s [${activeEvent.type.toUpperCase()}]`;
+        const icon = activeEvent.type === 'replan' ? '🔄' : '↪️';
+        document.getElementById('event-time').innerText = `${icon} T = ${activeEvent.t.toFixed(0)}s [${activeEvent.type.toUpperCase()}]`;
         document.getElementById('event-desc').innerText = activeEvent.detail;
       }
 
-      // 4. Update slider and time readout
       document.getElementById('timeline').value = t;
       document.getElementById('time-display').innerText = `${t.toFixed(1)}s / ${currentRunData.completion_time.toFixed(1)}s`;
     }
 
     // -------------------------------------------------------------
-    // Animation Loop with requestAnimationFrame
+    // Comparison Mode Logic
+    // -------------------------------------------------------------
+    function makeComparisonVisual(run, mapContainerId) {
+      const cmpMap = L.map(mapContainerId, {
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(cmpMap);
+
+      if (run.stops) {
+        run.stops.forEach((s, i) => {
+          const pin = L.divIcon({
+            className: 'custom-pin',
+            html: `<div class="stop-marker-pin">${i + 1}</div>`,
+            iconSize: [22, 22],
+            iconAnchor: [11, 11]
+          });
+          L.marker([s.lat, s.lon], { icon: pin }).addTo(cmpMap);
+        });
+      }
+
+      const routeCoords = run.path.map(p => [p.lat, p.lon]);
+      const route = L.polyline(routeCoords, { color: '#38bdf8', weight: 4, opacity: 0.8 }).addTo(cmpMap);
+
+      const vIcon = L.divIcon({
+        className: 'vehicle-marker-div',
+        html: `<div class="vehicle-courier-marker calm" style="width:26px;height:26px;font-size:13px;">🛵</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+      const vehicle = L.marker([run.path[0].lat, run.path[0].lon], { icon: vIcon, zIndexOffset: 1000 }).addTo(cmpMap);
+
+      cmpMap.fitBounds(route.getBounds(), { padding: [35, 35] });
+
+      return { run, map: cmpMap, route, vehicle };
+    }
+
+    async function toggleComparisonMode() {
+      const singleView = document.getElementById('single-view');
+      const cmpView = document.getElementById('comparison-view');
+      const hud = document.getElementById('telemetry-hud');
+      const toggleBtn = document.getElementById('btn-toggle-compare');
+
+      if (isComparisonMode) {
+        // Exit comparison
+        isComparisonMode = false;
+        cmpView.hidden = true;
+        singleView.hidden = false;
+        hud.style.display = 'flex';
+        toggleBtn.innerText = '⚔️ Compare Adaptive vs Fixed';
+        toggleBtn.classList.remove('primary');
+        map.invalidateSize();
+        updatePlayback(playbackTime);
+        return;
+      }
+
+      // Enter comparison
+      pause();
+      isComparisonMode = true;
+      singleView.hidden = true;
+      cmpView.hidden = false;
+      hud.style.display = 'none';
+      toggleBtn.innerText = '🔙 Single Route View';
+      toggleBtn.classList.add('primary');
+
+      const currentScenarioVal = document.getElementById('scenario-selector').value;
+      let tier = 'medium';
+      if (currentScenarioVal.includes('high')) tier = 'high';
+      else if (currentScenarioVal.includes('low')) tier = 'low';
+
+      try {
+        adaptiveRunData = await fetchRunData(`hero_${tier}_va_qpso`);
+        fixedRunData = await fetchRunData(`hero_${tier}_fixed_beta_qpso`);
+
+        if (!mapAdaptive) {
+          adaptiveVisual = makeComparisonVisual(adaptiveRunData, 'map-adaptive');
+          mapAdaptive = adaptiveVisual.map;
+        } else {
+          adaptiveVisual.run = adaptiveRunData;
+          adaptiveVisual.route.setLatLngs(adaptiveRunData.path.map(p => [p.lat, p.lon]));
+          adaptiveVisual.map.fitBounds(adaptiveVisual.route.getBounds(), { padding: [35, 35] });
+        }
+
+        if (!mapFixed) {
+          fixedVisual = makeComparisonVisual(fixedRunData, 'map-fixed');
+          mapFixed = fixedVisual.map;
+        } else {
+          fixedVisual.run = fixedRunData;
+          fixedVisual.route.setLatLngs(fixedRunData.path.map(p => [p.lat, p.lon]));
+          fixedVisual.map.fitBounds(fixedVisual.route.getBounds(), { padding: [35, 35] });
+        }
+
+        mapAdaptive.invalidateSize();
+        mapFixed.invalidateSize();
+
+        const maxDuration = Math.max(adaptiveRunData.completion_time, fixedRunData.completion_time);
+        document.getElementById('timeline').max = maxDuration;
+        playbackTime = 0.0;
+        updateComparisonPlayback(0.0);
+        play();
+      } catch (err) {
+        console.error('Error loading comparison runs:', err);
+        alert('Could not load matched pair for comparison. Make sure data is generated in frontend_data/.');
+        toggleComparisonMode();
+      }
+    }
+
+    function updateComparisonPlayback(t) {
+      if (!adaptiveRunData || !fixedRunData) return;
+
+      const maxDuration = Math.max(adaptiveRunData.completion_time, fixedRunData.completion_time);
+      document.getElementById('timeline').value = t;
+      document.getElementById('time-display').innerText = `${t.toFixed(1)}s / ${maxDuration.toFixed(1)}s`;
+
+      // Adaptive Vehicle
+      const tAdaptive = Math.min(t, adaptiveRunData.completion_time);
+      const posAdaptive = getInterpolatedPosition(adaptiveRunData.path, tAdaptive);
+      if (posAdaptive && adaptiveVisual) adaptiveVisual.vehicle.setLatLng(posAdaptive);
+      document.getElementById('clock-adaptive').innerText = `${tAdaptive.toFixed(1)}s / ${adaptiveRunData.completion_time.toFixed(1)}s`;
+
+      // Fixed Vehicle
+      const tFixed = Math.min(t, fixedRunData.completion_time);
+      const posFixed = getInterpolatedPosition(fixedRunData.path, tFixed);
+      if (posFixed && fixedVisual) fixedVisual.vehicle.setLatLng(posFixed);
+      document.getElementById('clock-fixed').innerText = `${tFixed.toFixed(1)}s / ${fixedRunData.completion_time.toFixed(1)}s`;
+
+      // Check Winner Highlights
+      const bannerAdaptive = document.getElementById('banner-adaptive');
+      const cardAdaptive = document.getElementById('card-adaptive');
+
+      if (t >= adaptiveRunData.completion_time && adaptiveRunData.completion_time < fixedRunData.completion_time) {
+        const diff = (fixedRunData.completion_time - adaptiveRunData.completion_time).toFixed(1);
+        bannerAdaptive.innerText = `🏆 Adaptive Finished ${diff}s Faster!`;
+        bannerAdaptive.style.display = 'block';
+        cardAdaptive.classList.add('winner');
+      } else {
+        bannerAdaptive.style.display = 'none';
+        cardAdaptive.classList.remove('winner');
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Animation Loop
     // -------------------------------------------------------------
     function animationLoop(timestamp) {
       if (!isPlaying) {
@@ -709,9 +1151,14 @@
         const deltaSec = (timestamp - lastAnimTimestamp) / 1000.0;
         playbackTime += deltaSec * playbackSpeed;
 
-        if (playbackTime >= currentRunData.completion_time) {
-          playbackTime = currentRunData.completion_time;
+        const maxDuration = isComparisonMode
+          ? Math.max(adaptiveRunData ? adaptiveRunData.completion_time : 100, fixedRunData ? fixedRunData.completion_time : 100)
+          : (currentRunData ? currentRunData.completion_time : 100);
+
+        if (playbackTime >= maxDuration) {
+          playbackTime = maxDuration;
           pause();
+          document.getElementById('btn-play-pause').innerText = '↺ Replay';
         }
 
         updatePlayback(playbackTime);
@@ -722,8 +1169,11 @@
     }
 
     function play() {
-      if (!currentRunData) return;
-      if (playbackTime >= currentRunData.completion_time) {
+      const maxDuration = isComparisonMode
+        ? Math.max(adaptiveRunData ? adaptiveRunData.completion_time : 100, fixedRunData ? fixedRunData.completion_time : 100)
+        : (currentRunData ? currentRunData.completion_time : 100);
+
+      if (playbackTime >= maxDuration) {
         playbackTime = 0.0;
       }
       isPlaying = true;
@@ -743,7 +1193,9 @@
       }
     }
 
+    // -------------------------------------------------------------
     // Event Listeners
+    // -------------------------------------------------------------
     document.getElementById('btn-play-pause').addEventListener('click', () => {
       if (isPlaying) pause();
       else play();
@@ -766,7 +1218,44 @@
 
     document.getElementById('scenario-selector').addEventListener('change', (e) => {
       pause();
+      if (isComparisonMode) {
+        toggleComparisonMode(); // return to single mode for clean switch
+      }
       loadScenario(e.target.value);
+    });
+
+    document.getElementById('btn-toggle-compare').addEventListener('click', toggleComparisonMode);
+
+    document.getElementById('btn-toggle-tiles').addEventListener('click', () => {
+      if (currentTileMode === 'dark') {
+        map.removeLayer(darkTiles);
+        osmTiles.addTo(map);
+        currentTileMode = 'osm';
+      } else {
+        map.removeLayer(osmTiles);
+        darkTiles.addTo(map);
+        currentTileMode = 'dark';
+      }
+    });
+
+    document.getElementById('btn-reset-view').addEventListener('click', () => {
+      if (isComparisonMode) {
+        if (adaptiveVisual) adaptiveVisual.map.fitBounds(adaptiveVisual.route.getBounds(), { padding: [35, 35] });
+        if (fixedVisual) fixedVisual.map.fitBounds(fixedVisual.route.getBounds(), { padding: [35, 35] });
+      } else {
+        if (routePolyline) map.fitBounds(routePolyline.getBounds(), { padding: [45, 45] });
+        else map.fitBounds(DELHI_BBOX);
+      }
+    });
+
+    // Intro Modal
+    const introModal = document.getElementById('intro-modal');
+    document.getElementById('btn-close-intro').addEventListener('click', () => {
+      introModal.hidden = true;
+      play();
+    });
+    document.getElementById('btn-open-intro').addEventListener('click', () => {
+      introModal.hidden = false;
     });
 
     // -------------------------------------------------------------
@@ -775,18 +1264,21 @@
     async function loadScenario(scenarioId) {
       try {
         const data = await fetchRunData(scenarioId);
-        renderScenario(data);
+        renderSingleScenario(data);
       } catch (err) {
         console.error(err);
         document.getElementById('event-desc').innerText = `Error loading scenario: ${err.message}`;
       }
     }
 
-    // Parse URL parameter ?run=... or use default
     const urlParams = new URLSearchParams(window.location.search);
     const initialRun = urlParams.get('run') || 'hero_medium_va_qpso';
     document.getElementById('scenario-selector').value = initialRun;
     loadScenario(initialRun);
+
+    if (urlParams.get('compare') === 'true') {
+      setTimeout(toggleComparisonMode, 500);
+    }
   </script>
 </body>
 </html>
